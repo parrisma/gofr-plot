@@ -1,0 +1,34 @@
+FROM gplot_base:latest
+
+# Add Unix group 'gplot' with auto-allocated GID
+RUN groupadd --system gplot
+
+# Add user 'gplot' with auto-allocated UID and assign to group 'gplot'
+RUN useradd --system --gid gplot --home-dir /home/gplot --create-home gplot
+
+# Create application directory
+RUN mkdir -p /home/gplot/app
+
+# Copy project files
+COPY --chown=gplot:gplot pyproject.toml /home/gplot/
+COPY --chown=gplot:gplot app/ /home/gplot/app/
+
+# Switch to gplot user
+USER gplot
+WORKDIR /home/gplot
+
+# Create a UV virtual environment for production
+RUN uv venv /home/gplot/.venv --python=python3.11
+
+# Set environment variables to use the venv
+ENV VIRTUAL_ENV=/home/gplot/.venv
+ENV PATH="/home/gplot/.venv/bin:$PATH"
+
+# Install dependencies using UV and pyproject.toml
+RUN uv pip install -e .
+
+# Expose port for web server (if needed)
+EXPOSE 8000
+
+# Default command to run the MCP server
+CMD ["python", "-m", "app.mcp_server"]

@@ -1,0 +1,34 @@
+FROM gplot_base:latest
+
+# Install Git, GitHub CLI, and SSH daemon
+RUN apt-get update && apt-get install -y git gh openssh-server && rm -rf /var/lib/apt/lists/*
+
+# Set default UID and GID (can be overridden at build time)
+ARG USER_UID=1000
+ARG USER_GID=1000
+
+# Add Unix group 'gplot' with configurable GID
+RUN groupadd --system --gid ${USER_GID} gplot
+
+# Add user 'gplot' with configurable UID and assign to group 'gplot'
+RUN useradd --system --uid ${USER_UID} --gid ${USER_GID} --home-dir /home/gplot --create-home gplot
+
+# Create project directory and set ownership to gplot
+RUN mkdir -p /home/gplot/devroot/gplot && chown -R gplot:gplot /home/gplot/devroot
+
+# Switch to gplot user
+USER gplot
+WORKDIR /home/gplot/devroot/gplot
+
+# Configure SSH for user gplot only (no exposed port, uses ~/.ssh)
+RUN mkdir -p /home/gplot/.ssh && chmod 700 /home/gplot/.ssh
+
+# Create a UV virtual environment for development
+RUN uv venv /home/gplot/.venv --python=python3.11
+
+# Set environment variables to use the venv
+ENV VIRTUAL_ENV=/home/gplot/.venv
+ENV PATH="/home/gplot/.venv/bin:$PATH"
+
+# Keep container running with infinite wait loop
+CMD ["tail", "-f", "/dev/null"]

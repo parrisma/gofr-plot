@@ -1,0 +1,30 @@
+{
+    "name": "gplot Development Container",
+    "dockerFile": "../docker/Dockerfile.dev",
+    "context": "..",
+    "workspaceFolder": "/home/gplot/devroot/gplot",
+    "remoteUser": "gplot",
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "bierner.markdown-preview-github-styles",
+                "github.copilot",
+                "github.copilot-chat",
+                "github.vscode-pull-request-github",
+                "ms-python.black-formatter",
+                "ms-python.debugpy",
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "ms-python.vscode-python-envs",
+                "njpwerner.autodocstring"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/home/gplot/.venv/bin/python",
+                "python.terminal.activateEnvironment": true
+            }
+        }
+    },
+    "mounts": [
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/gplot/.ssh,type=bind,consistency=cached"
+    ]
+}
