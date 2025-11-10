@@ -27,8 +27,10 @@ ENV PATH="/home/gplot/.venv/bin:$PATH"
 # Install dependencies using UV and pyproject.toml
 RUN uv pip install -e .
 
-# Expose port for web server (if needed)
-EXPOSE 8000
+# Expose ports
+# 8000: HTTP REST API
+# 8001: MCP SSE Server
+EXPOSE 8000 8001
 
 # Default command to run the MCP server
 CMD ["python", "-m", "app.mcp_server"]

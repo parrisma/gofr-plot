@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
 """
 Simple test script to verify MCP server functionality.
-This script tests the render_graph tool through the MCP protocol.
+This script tests the render_graph tool through the MCP protocol using SSE transport.
 """
 
 import asyncio
 import json
 import logging
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+import sys
+from pathlib import Path
+import httpx
+
+# Add parent directory to path to enable imports when run directly
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from mcp import ClientSession
+from mcp.client.sse import sse_client
 from app.logger import ConsoleLogger
 
 
 async def test_mcp_server():
-    """Test the MCP server by calling the render_graph tool"""
+    """Test the MCP server by calling the render_graph tool via SSE"""
 
     # Initialize logger
     logger = ConsoleLogger(name="mcp_test", level=logging.INFO)
 
-    # Define server parameters
-    server_params = StdioServerParameters(command="python", args=["app/mcp_server.py"], env=None)
+    # SSE server endpoint
+    sse_url = "http://localhost:8001/sse"
 
-    logger.info("Starting MCP server test")
+    logger.info("Starting MCP server test with SSE transport", url=sse_url)
     print("-" * 50)
 
-    async with stdio_client(server_params) as (read, write):
+    # Connect to SSE server
+    async with sse_client(sse_url) as (read, write):
         async with ClientSession(read, write) as session:
             # Initialize the session
             await session.initialize()
@@ -108,11 +116,11 @@ async def test_mcp_server():
             error_args = {"title": "Mismatched Arrays", "x": [1, 2, 3], "y": [1, 2], "type": "line"}
             error_result = await session.call_tool("render_graph", error_args)
             assert len(error_result.content) > 0
-            error_text = (
-                error_result.content[0].text
-                if hasattr(error_result.content[0], "text")
-                else str(error_result.content[0])
-            )
+            error_content = error_result.content[0]
+            if hasattr(error_content, "text"):
+                error_text = error_content.text  # type: ignore
+            else:
+                error_text = str(error_content)
             assert "validation" in error_text.lower() and "length" in error_text.lower()
             logger.info("Validation correctly caught mismatched arrays")
 
@@ -127,11 +135,11 @@ async def test_mcp_server():
             }
             type_result = await session.call_tool("render_graph", invalid_type_args)
             assert len(type_result.content) > 0
-            type_text = (
-                type_result.content[0].text
-                if hasattr(type_result.content[0], "text")
-                else str(type_result.content[0])
-            )
+            type_content = type_result.content[0]
+            if hasattr(type_content, "text"):
+                type_text = type_content.text  # type: ignore
+            else:
+                type_text = str(type_content)
             assert "validation" in type_text.lower() and (
                 "invalid" in type_text.lower() or "type" in type_text.lower()
             )
@@ -143,11 +151,11 @@ async def test_mcp_server():
             empty_args = {"title": "Empty Data", "x": [], "y": [], "type": "line"}
             empty_result = await session.call_tool("render_graph", empty_args)
             assert len(empty_result.content) > 0
-            empty_text = (
-                empty_result.content[0].text
-                if hasattr(empty_result.content[0], "text")
-                else str(empty_result.content[0])
-            )
+            empty_content = empty_result.content[0]
+            if hasattr(empty_content, "text"):
+                empty_text = empty_content.text  # type: ignore
+            else:
+                empty_text = str(empty_content)
             assert "validation" in empty_text.lower() and "empty" in empty_text.lower()
             logger.info("Validation correctly caught empty arrays")
 
@@ -157,11 +165,11 @@ async def test_mcp_server():
             alpha_args = {"title": "Bad Alpha", "x": [1, 2, 3], "y": [1, 2, 3], "alpha": 2.5}
             alpha_result = await session.call_tool("render_graph", alpha_args)
             assert len(alpha_result.content) > 0
-            alpha_text = (
-                alpha_result.content[0].text
-                if hasattr(alpha_result.content[0], "text")
-                else str(alpha_result.content[0])
-            )
+            alpha_content = alpha_result.content[0]
+            if hasattr(alpha_content, "text"):
+                alpha_text = alpha_content.text  # type: ignore
+            else:
+                alpha_text = str(alpha_content)
             assert "validation" in alpha_text.lower() and "alpha" in alpha_text.lower()
             logger.info("Validation correctly caught invalid alpha")
 

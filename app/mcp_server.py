@@ -3,6 +3,9 @@
 
 This server exposes graph rendering capabilities through the Model Context Protocol.
 It provides tools to render line and bar charts using matplotlib.
+
+This server uses SSE (Server-Sent Events) transport, making it compatible with
+n8n's MCP Client Tool and other modern MCP clients.
 """
 
 import asyncio
@@ -12,7 +15,11 @@ from pathlib import Path
 from typing import Any
 from mcp.server.models import InitializationOptions
 from mcp.server import NotificationOptions, Server
-from mcp.server.stdio import stdio_server
+from mcp.server.sse import SseServerTransport
+from starlette.applications import Starlette
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Mount, Route
 from mcp.types import (
     Tool,
     TextContent,
@@ -273,6 +280,8 @@ async def handle_call_tool(
         try:
             if isinstance(base64_image, bytes):
                 base64_image = base64_image.decode("utf-8")
+            elif isinstance(base64_image, (bytearray, memoryview)):
+                base64_image = bytes(base64_image).decode("utf-8")
             logger.debug("Image encoded successfully")
         except Exception as e:
             logger.error("Failed to encode image", error=str(e))
@@ -284,16 +293,20 @@ async def handle_call_tool(
                 )
             ]
 
+        # Type assertion for type checker - base64_image is now definitely a str
+        base64_str: str = str(base64_image)
+
         # Return the rendered image
         try:
             logger.info("Returning successful response", title=graph_data.title)
-            return [
-                ImageContent(type="image", data=base64_image, mimeType="image/png"),
+            result: list[TextContent | ImageContent | EmbeddedResource] = [
+                ImageContent(type="image", data=base64_str, mimeType="image/png"),
                 TextContent(
                     type="text",
                     text=f"Successfully rendered {graph_data.type} chart: '{graph_data.title}'",
                 ),
             ]
+            return result
         except Exception as e:
             logger.error("Failed to create response", error=str(e))
             return [
@@ -322,28 +335,57 @@ async def handle_call_tool(
         ]
 
 
+# Create SSE transport with /messages/ endpoint for POSTing messages
+sse = SseServerTransport("/messages/")
+
+
+async def handle_sse(request: Request) -> Response:
+    """Handle SSE connections for MCP protocol."""
+    async with sse.connect_sse(request.scope, request.receive, request._send) as streams:  # type: ignore[reportPrivateUsage]
+        await app.run(
+            streams[0],
+            streams[1],
+            InitializationOptions(
+                server_name="gplot-renderer",
+                server_version="1.0.0",
+                capabilities=app.get_capabilities(
+                    notification_options=NotificationOptions(),
+                    experimental_capabilities={},
+                ),
+            ),
+        )
+    return Response()
+
+
+# Create Starlette app for SSE transport
+starlette_app = Starlette(
+    debug=True,
+    routes=[
+        Route("/sse", endpoint=handle_sse, methods=["GET"]),
+        Mount("/messages/", app=sse.handle_post_message),
+    ],
+)
+
+
 async def main():
     """
-    Run the MCP server with comprehensive error handling.
+    Run the MCP server with SSE transport and comprehensive error handling.
 
-    Ensures the server starts properly and handles any initialization errors.
+    The server runs on port 8001 by default and serves MCP protocol over SSE.
     """
-    logger.info("Starting MCP server", version="1.0.0")
+    import uvicorn
+
+    logger.info("Starting MCP SSE server", version="1.0.0", port=8001)
     try:
-        async with stdio_server() as (read_stream, write_stream):
-            logger.info("Server initialized, awaiting connections")
-            await app.run(
-                read_stream,
-                write_stream,
-                InitializationOptions(
-                    server_name="gplot-renderer",
-                    server_version="1.0.0",
-                    capabilities=app.get_capabilities(
-                        notification_options=NotificationOptions(),
-                        experimental_capabilities={},
-                    ),
-                ),
-            )
+        config = uvicorn.Config(
+            starlette_app,
+            host="0.0.0.0",
+            port=8001,
+            log_level="info",
+        )
+        server = uvicorn.Server(config)
+        logger.info("Server initialized, listening on http://0.0.0.0:8001/sse")
+        await server.serve()
     except KeyboardInterrupt:
         # Handle graceful shutdown
         logger.info("Server stopped by user")
