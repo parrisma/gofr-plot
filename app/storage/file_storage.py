@@ -45,8 +45,17 @@ class FileStorage(ImageStorageBase):
         if self.metadata_file.exists():
             try:
                 with open(self.metadata_file, "r") as f:
-                    self.metadata = json.load(f)
-                self.logger.debug("Metadata loaded", images_count=len(self.metadata))
+                    data = json.load(f)
+                    # Validate that metadata is a dict, not a list or other type
+                    if isinstance(data, dict):
+                        self.metadata = data
+                        self.logger.debug("Metadata loaded", images_count=len(self.metadata))
+                    else:
+                        self.logger.warning(
+                            "Metadata has unexpected structure, resetting to empty dict",
+                            type=type(data).__name__,
+                        )
+                        self.metadata = {}
             except Exception as e:
                 self.logger.error("Failed to load metadata", error=str(e))
                 self.metadata = {}
