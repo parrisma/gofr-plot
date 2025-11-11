@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Test ping endpoint for web server"""
+"""Test ping endpoint for web server (web-specific filename to avoid import-name collision)
+
+This file was renamed from test_ping.py to avoid import filename collisions with
+the MCP test suite which also had a test_ping.py module.
+"""
 
 import sys
 from pathlib import Path

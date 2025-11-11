@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
+from app.auth.service import AuthService
 
 
 async def test_mcp_server():
@@ -24,6 +25,14 @@ async def test_mcp_server():
 
     # Initialize logger
     logger = ConsoleLogger(name="mcp_test", level=logging.INFO)
+
+    # Create auth service and token for testing
+    auth_service = AuthService(
+        secret_key="test-secret-key-for-auth-testing",
+        token_store_path="/tmp/gplot_test_tokens.json",
+    )
+    token = auth_service.create_token(group="test_group")
+    logger.info("Created test token", token=token[:20] + "...")
 
     # Streamable HTTP server endpoint
     http_url = "http://localhost:8001/mcp/"
@@ -55,6 +64,7 @@ async def test_mcp_server():
                 "xlabel": "X Axis",
                 "ylabel": "Y Axis",
                 "type": "line",
+                "token": token,
             }
 
             line_result = await session.call_tool("render_graph", line_args)
@@ -72,6 +82,7 @@ async def test_mcp_server():
                 "xlabel": "Categories",
                 "ylabel": "Values",
                 "type": "bar",
+                "token": token,
             }
 
             bar_result = await session.call_tool("render_graph", bar_args)
@@ -86,6 +97,7 @@ async def test_mcp_server():
                 "y": [2, 5, 3, 8, 6],
                 "xlabel": "X Values",
                 "ylabel": "Y Values",
+                "token": token,
                 "type": "scatter",
             }
 
@@ -103,6 +115,7 @@ async def test_mcp_server():
                 "y": [2, 4, 6, 8, 10],
                 "type": "line",
                 "theme": "dark",
+                "token": token,
             }
 
             dark_result = await session.call_tool("render_graph", dark_args)
@@ -113,7 +126,13 @@ async def test_mcp_server():
             # Test validation - mismatched arrays
             print("\n" + "-" * 50)
             logger.info("Testing validation for mismatched arrays")
-            error_args = {"title": "Mismatched Arrays", "x": [1, 2, 3], "y": [1, 2], "type": "line"}
+            error_args = {
+                "title": "Mismatched Arrays",
+                "x": [1, 2, 3],
+                "y": [1, 2],
+                "type": "line",
+                "token": token,
+            }
             error_result = await session.call_tool("render_graph", error_args)
             assert len(error_result.content) > 0
             error_content = error_result.content[0]
@@ -132,6 +151,7 @@ async def test_mcp_server():
                 "x": [1, 2, 3],
                 "y": [1, 2, 3],
                 "type": "invalid_type",
+                "token": token,
             }
             type_result = await session.call_tool("render_graph", invalid_type_args)
             assert len(type_result.content) > 0
@@ -148,7 +168,7 @@ async def test_mcp_server():
             # Test validation - empty arrays
             print("\n" + "-" * 50)
             logger.info("Testing validation for empty arrays")
-            empty_args = {"title": "Empty Data", "x": [], "y": [], "type": "line"}
+            empty_args = {"title": "Empty Data", "x": [], "y": [], "type": "line", "token": token}
             empty_result = await session.call_tool("render_graph", empty_args)
             assert len(empty_result.content) > 0
             empty_content = empty_result.content[0]
@@ -162,7 +182,13 @@ async def test_mcp_server():
             # Test validation - invalid alpha
             print("\n" + "-" * 50)
             logger.info("Testing validation for invalid alpha")
-            alpha_args = {"title": "Bad Alpha", "x": [1, 2, 3], "y": [1, 2, 3], "alpha": 2.5}
+            alpha_args = {
+                "title": "Bad Alpha",
+                "x": [1, 2, 3],
+                "y": [1, 2, 3],
+                "alpha": 2.5,
+                "token": token,
+            }
             alpha_result = await session.call_tool("render_graph", alpha_args)
             assert len(alpha_result.content) > 0
             alpha_content = alpha_result.content[0]
@@ -172,6 +198,10 @@ async def test_mcp_server():
                 alpha_text = str(alpha_content)
             assert "validation" in alpha_text.lower() and "alpha" in alpha_text.lower()
             logger.info("Validation correctly caught invalid alpha")
+
+            # Cleanup: revoke the test token
+            auth_service.revoke_token(token)
+            logger.info("Test token revoked")
 
             print("\n" + "=" * 50)
             logger.info("All tests completed successfully")

@@ -16,6 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from httpx import AsyncClient, ASGITransport
 from app.logger import ConsoleLogger
 from app.web_server import GraphWebServer
+from app.auth.service import AuthService
 
 
 async def test_web_server():
@@ -23,15 +24,26 @@ async def test_web_server():
 
     logger = ConsoleLogger(name="web_test", level=logging.INFO)
 
-    # Create server instance
-    server = GraphWebServer()
+    # Create server instance with auth
+    server = GraphWebServer(
+        jwt_secret="test-secret-key", token_store_path="/tmp/manual_test_tokens.json"
+    )
     app = server.app
+
+    # Create auth service and token for testing
+    auth_service = AuthService(
+        secret_key="test-secret-key", token_store_path="/tmp/manual_test_tokens.json"
+    )
+    token = auth_service.create_token(group="test_group")
+    logger.info("Created test token", token=token[:20] + "...")
 
     logger.info("Starting web server tests")
     print("-" * 50)
 
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
+    async with AsyncClient(
+        transport=transport, base_url="http://test", headers={"Authorization": f"Bearer {token}"}
+    ) as client:
 
         # Test 1: Line chart with base64 response
         print("\n" + "-" * 50)
@@ -259,6 +271,10 @@ async def test_web_server():
         assert response.status_code == 400
         error_data = response.json()
         logger.info("Validation correctly caught invalid color format")
+
+    # Cleanup: revoke the test token
+    auth_service.revoke_token(token)
+    logger.info("Test token revoked")
 
     print("\n" + "=" * 50)
     logger.info("All web server tests completed successfully")
