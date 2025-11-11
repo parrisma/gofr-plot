@@ -80,7 +80,7 @@ Set environment variable before starting the server:
 
 ```bash
 export GPLOT_STORAGE_DIR=/path/to/custom/storage
-python -m app.mcp_server
+python -m app.main_mcp
 ```
 
 Or modify `app/storage.py` to change the default.
@@ -201,7 +201,7 @@ Run the proxy mode test suite:
 
 ```bash
 # Start MCP server first
-python -m app.mcp_server
+python -m app.main_mcp
 
 # In another terminal
 python test/mcp/test_proxy_mode.py

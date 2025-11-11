@@ -1,37 +1,167 @@
 {
     "version": "0.2.0",
     "configurations": [
+        // ===== Server Launch Configurations =====
         {
-            "name": "Python: Run Web Server",
+            "name": "Launch: Web Server (Port 8000)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/app/main.py",
+            "module": "app.main_web",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "GPLOT_JWT_SECRET": "test-secret-key-for-auth-testing"
+            },
+            "args": [
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8000",
+                "--token-store",
+                "/tmp/gplot_test_tokens.json"
+            ]
         },
         {
-            "name": "Python: Run MCP Server",
+            "name": "Launch: MCP Server (Port 8001)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/app/mcp_server.py",
+            "module": "app.main_mcp",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "GPLOT_JWT_SECRET": "test-secret-key-for-auth-testing"
+            },
+            "args": [
+                "--host",
+                "0.0.0.0",
+                "--port",
+                "8001",
+                "--token-store",
+                "/tmp/gplot_test_tokens.json"
+            ]
+        },
+        // ===== Test Suite Configurations =====
+        {
+            "name": "Test: All Tests (pytest)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "test/",
+                "-v"
+            ]
         },
         {
-            "name": "Python: Run MCP Tests",
+            "name": "Test: Web Server Tests",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/test/mcp/test_mcp_server.py",
+            "module": "pytest",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "python": "${workspaceFolder}/.venv/bin/python",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            },
+            "args": [
+                "test/web/",
+                "-v",
+                "-p",
+                "pytest_asyncio"
+            ]
         },
         {
-            "name": "Python: Run Web Server Tests",
+            "name": "Test: MCP Server Tests",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/test/web/test_web_server.py",
+            "module": "pytest",
             "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "GPLOT_JWT_SECRET": "test-secret-key-for-auth-testing"
+            },
+            "args": [
+                "test/mcp/",
+                "-v"
+            ]
+        },
+        {
+            "name": "Test: Authentication Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}",
+                "GPLOT_JWT_SECRET": "test-secret-key-for-auth-testing"
+            },
+            "args": [
+                "test/auth/",
+                "-v"
+            ]
+        },
+        {
+            "name": "Test: Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "pytest",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "${file}",
+                "-v"
+            ]
+        },
+        // ===== Manual Test Scripts =====
+        {
+            "name": "Manual: Web Server Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/web/manual_test_web_server.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Manual: MCP Server Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/mcp/manual_test_mcp_server.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Manual: MCP Discovery Test",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/test/mcp/manual_mcp_discovery.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        // ===== Utility Scripts =====
+        {
+            "name": "Utility: Token Manager",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/scripts/token_manager.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}",
+            "args": [
+                "list"
+            ]
         }
     ]
 }

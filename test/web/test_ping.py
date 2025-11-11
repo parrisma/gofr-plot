@@ -6,34 +6,47 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import pytest
 from fastapi.testclient import TestClient
 from app.web_server import GraphWebServer
 
 
-def test_ping_endpoint():
-    """Test that ping endpoint returns status and timestamp"""
+@pytest.fixture
+def client():
+    """Create a test client for the web server"""
     server = GraphWebServer()
-    client = TestClient(server.app)
+    return TestClient(server.app)
 
+
+def test_ping_endpoint_returns_200(client):
+    """Test that ping endpoint returns 200 status"""
     response = client.get("/ping")
-
     assert response.status_code == 200
+
+
+def test_ping_endpoint_returns_ok_status(client):
+    """Test that ping endpoint returns 'ok' status"""
+    response = client.get("/ping")
     data = response.json()
 
     assert "status" in data
     assert data["status"] == "ok"
 
+
+def test_ping_endpoint_returns_timestamp(client):
+    """Test that ping endpoint returns a timestamp"""
+    response = client.get("/ping")
+    data = response.json()
+
     assert "timestamp" in data
     assert isinstance(data["timestamp"], str)
+    assert len(data["timestamp"]) > 0
+
+
+def test_ping_endpoint_returns_service_name(client):
+    """Test that ping endpoint returns service identifier"""
+    response = client.get("/ping")
+    data = response.json()
 
     assert "service" in data
     assert data["service"] == "gplot"
-
-    print("✓ Ping endpoint returns correct status and timestamp")
-
-
-if __name__ == "__main__":
-    test_ping_endpoint()
-    print("\n" + "=" * 50)
-    print("All ping tests passed!")
-    print("=" * 50)

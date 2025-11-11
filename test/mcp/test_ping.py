@@ -6,21 +6,23 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-import asyncio
+import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
 import logging
 
 
-async def test_ping():
-    """Test that ping tool returns timestamp"""
+MCP_URL = "http://localhost:8001/mcp/"
+
+
+@pytest.mark.asyncio
+async def test_ping_tool_available():
+    """Test that ping tool is available in tool list"""
     logger = ConsoleLogger(name="ping_test", level=logging.INFO)
-    logger.info("Starting MCP ping test with Streamable HTTP transport")
+    logger.info("Testing ping tool availability")
 
-    http_url = "http://localhost:8001/mcp/"
-
-    async with streamablehttp_client(http_url) as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
             logger.info("MCP server initialized successfully")
@@ -31,7 +33,18 @@ async def test_ping():
             logger.info("Found tools", count=len(tool_names), tools=tool_names)
 
             assert "ping" in tool_names, "ping tool not found"
-            logger.info("Ping tool is available")
+            logger.info("✓ Ping tool is available")
+
+
+@pytest.mark.asyncio
+async def test_ping_returns_correct_response():
+    """Test that ping tool returns timestamp and service info"""
+    logger = ConsoleLogger(name="ping_test", level=logging.INFO)
+    logger.info("Testing ping tool response")
+
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
 
             # Call ping tool
             result = await session.call_tool("ping", arguments={})
@@ -42,16 +55,8 @@ async def test_ping():
             assert hasattr(text_content, "text"), "Response is not text"
 
             response_text = text_content.text  # type: ignore
-            assert "Server is running" in response_text
-            assert "Timestamp:" in response_text
-            assert "Service: gplot" in response_text
+            assert "Server is running" in response_text, "Missing 'Server is running' message"
+            assert "Timestamp:" in response_text, "Missing timestamp"
+            assert "Service: gplot" in response_text, "Missing service identifier"
 
-            logger.info("Ping tool returned correct response")
-            logger.info("All ping tests completed successfully")
-
-
-if __name__ == "__main__":
-    asyncio.run(test_ping())
-    print("\n" + "=" * 50)
-    print("All MCP ping tests passed!")
-    print("=" * 50)
+            logger.info("✓ Ping tool returned correct response")

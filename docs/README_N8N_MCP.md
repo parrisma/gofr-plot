@@ -39,7 +39,7 @@ N8N can connect directly to gplot's Streamable HTTP MCP endpoint:
 1. Add "MCP Client Tool" node to your n8n workflow
 2. Configure the endpoint:
    - URL: `http://gplot_dev:8001/mcp` (dev) or `http://gplot_prod:8001/mcp` (prod)
-   - Authentication: None (if running on gmcp_net network)
+   - Authentication: None (if running on gplot_net network)
 3. Use the `render_graph` or `ping` tools via MCP protocol
 
 **Example MCP Tool Call (Normal Mode):**
@@ -126,7 +126,7 @@ However, this is for external clients connecting to n8n or other services, not f
 
 ### Current Setup
 
-### Docker Network: gmcp_net
+### Docker Network: gplot_net
 Both gplot and n8n containers run on the same Docker network:
 - **gplot_dev/prod REST API:** Accessible at `http://gplot_dev:8000` or `http://gplot_prod:8000`
 - **gplot_dev/prod MCP Streamable HTTP:** Accessible at `http://gplot_dev:8001/mcp` or `http://gplot_prod:8001/mcp`
@@ -141,7 +141,7 @@ Both gplot and n8n containers run on the same Docker network:
 └─────────────┘                              └────────────┘
      │                                            │
      │                                            │
-     └────────── gmcp_net Network ────────────────┘
+     └────────── gplot_net Network ────────────────┘
 ```
 
 ### Recommended Usage in N8N
@@ -190,4 +190,4 @@ You can choose between:
 1. **MCP Protocol (Port 8001):** Full MCP tool integration with standardized Streamable HTTP protocol
 2. **HTTP REST API (Port 8000):** Simple HTTP endpoint for direct rendering requests
 
-Both approaches work seamlessly within the gmcp_net Docker network.
+Both approaches work seamlessly within the gplot_net Docker network.

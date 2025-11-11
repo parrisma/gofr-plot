@@ -7,6 +7,8 @@ The themes module provides a flexible theming system for graph rendering, allowi
 - **Theme** (base.py) - Abstract base class defining the theme interface
 - **LightTheme** (light.py) - Clean, bright theme with white background
 - **DarkTheme** (dark.py) - Muted colors with dark background for reduced eye strain
+- **BizLightTheme** (bizlight.py) - Professional business light theme with corporate styling
+- **BizDarkTheme** (bizdark.py) - Professional business dark theme for low-glare displays
 
 ## Built-in Themes
 
@@ -23,6 +25,24 @@ The themes module provides a flexible theming system for graph rendering, allowi
 - Dark grid (#3A3A3A)
 - Light blue default color (#5DADE2)
 - 8 muted colors optimized for dark backgrounds
+
+### BizLight Theme
+- Professional business light theme
+- Clean white background (#FFFFFF)
+- Dark professional text (#222222)
+- Subtle grid (#D0D4D9)
+- Corporate blue accent (#2F6DB2)
+- 8 professional business colors
+- DejaVu Sans font (Arial when available via Docker fonts)
+
+### BizDark Theme
+- Professional business dark theme for low-glare displays
+- Dark background (#0F1113) for reduced eye strain
+- High legibility text (#E6E6E6)
+- Subdued windowframe-style grid (#3A3F44)
+- BTIG-style calm blue accent (#2F6DB2)
+- 8 muted professional colors
+- DejaVu Sans font (Arial when available via Docker fonts)
 
 ## Usage
 
@@ -219,4 +239,4 @@ class HighContrastTheme(Theme):
 
 ## Back to Main Documentation
 
-[← Back to Project README](../../README.md)
+[← Back to Project README](../README.md)

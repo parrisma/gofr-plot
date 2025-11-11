@@ -1,15 +1,26 @@
 #!/bin/sh
 
+# Usage: ./run-n8n.sh [-r] [-p PORT]
+# Options:
+#   -r         Recreate gplot_volume (drop and recreate if it exists)
+#   -p PORT    Port to expose n8n on (default: 5678)
+# Example: ./run-n8n.sh -p 9000 -r
+
 # Parse command line arguments
 RECREATE_VOLUME=false
-while getopts "r" opt; do
+N8N_PORT=5678
+while getopts "rp:" opt; do
     case $opt in
         r)
             RECREATE_VOLUME=true
             ;;
+        p)
+            N8N_PORT=$OPTARG
+            ;;
         \?)
-            echo "Usage: $0 [-r]"
-            echo "  -r    Recreate gmcp_volume (drop and recreate if it exists)"
+            echo "Usage: $0 [-r] [-p PORT]"
+            echo "  -r         Recreate gplot_volume (drop and recreate if it exists)"
+            echo "  -p PORT    Port to expose n8n on (default: 5678)"
             exit 1
             ;;
     esac
@@ -30,35 +41,35 @@ else
 fi
 
 # Create docker network if it doesn't exist
-echo "Checking for gmcp_net network..."
-if ! docker network inspect gmcp_net >/dev/null 2>&1; then
-    echo "Creating gmcp_net network..."
-    docker network create gmcp_net
+echo "Checking for gplot_net network..."
+if ! docker network inspect gplot_net >/dev/null 2>&1; then
+    echo "Creating gplot_net network..."
+    docker network create gplot_net
 else
-    echo "Network gmcp_net already exists"
+    echo "Network gplot_net already exists"
 fi
 
-# Handle gmcp_volume creation/recreation
+# Handle gplot_volume creation/recreation
 if [ "$RECREATE_VOLUME" = true ]; then
     echo "Recreate flag (-r) detected"
-    if docker volume inspect gmcp_volume >/dev/null 2>&1; then
-        echo "Removing existing gmcp_volume..."
-        docker volume rm gmcp_volume 2>/dev/null || {
-            echo "ERROR: Failed to remove gmcp_volume. It may be in use."
+    if docker volume inspect gplot_volume >/dev/null 2>&1; then
+        echo "Removing existing gplot_volume..."
+        docker volume rm gplot_volume 2>/dev/null || {
+            echo "ERROR: Failed to remove gplot_volume. It may be in use."
             echo "Stop all containers using the volume first."
             exit 1
         }
     fi
-    echo "Creating gmcp_volume..."
-    docker volume create gmcp_volume
+    echo "Creating gplot_volume..."
+    docker volume create gplot_volume
 else
-    # Create gmcp_volume if it doesn't exist
-    echo "Checking for gmcp_volume..."
-    if ! docker volume inspect gmcp_volume >/dev/null 2>&1; then
-        echo "Creating gmcp_volume..."
-        docker volume create gmcp_volume
+    # Create gplot_volume if it doesn't exist
+    echo "Checking for gplot_volume..."
+    if ! docker volume inspect gplot_volume >/dev/null 2>&1; then
+        echo "Creating gplot_volume..."
+        docker volume create gplot_volume
     else
-        echo "Volume gmcp_volume already exists"
+        echo "Volume gplot_volume already exists"
     fi
 fi
 
@@ -70,24 +81,25 @@ echo "Removing existing n8n container..."
 docker rm n8n 2>/dev/null || true
 
 echo "Starting n8n container..."
+echo "Port: $N8N_PORT"
 docker run -d \
   --name n8n \
-  --network gmcp_net \
-  -p 5678:5678 \
+  --network gplot_net \
+  -p $N8N_PORT:5678 \
   -e GENERIC_TIMEZONE="$TIMEZONE" \
   -e TZ="$TIMEZONE" \
   -e N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS=true \
   -e N8N_RUNNERS_ENABLED=true \
-  -v gmcp_volume:/home/node/.n8n \
+  -v gplot_volume:/home/node/.n8n \
   -v "${N8N_SHARE_DIR}":/data/n8n_share \
   docker.n8n.io/n8nio/n8n
 
 if docker ps -q -f name=n8n | grep -q .; then
     echo "Container n8n is now running"
     echo ""
-    echo "n8n is accessible at http://localhost:5678"
-    echo "On gmcp_net, other containers can reach it at http://n8n:5678"
-    echo "Data stored in Docker volume: gmcp_volume"
+    echo "n8n is accessible at http://localhost:$N8N_PORT"
+    echo "On gplot_net, other containers can reach it at http://n8n:5678"
+    echo "Data stored in Docker volume: gplot_volume"
     echo "Shared directory: ${N8N_SHARE_DIR} -> /data/n8n_share (inside container)"
     echo ""
     echo "To view logs: docker logs -f n8n"

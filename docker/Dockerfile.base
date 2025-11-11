@@ -30,6 +30,21 @@ RUN apt-get update && apt-get install -y \
   iputils-ping \
   && rm -rf /var/lib/apt/lists/*
 
+# Pre-accept Microsoft fonts EULA
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
+
+# Install fonts for matplotlib
+RUN apt-get update && apt-get install -y \
+  fontconfig \
+  fonts-dejavu \
+  fonts-dejavu-core \
+  fonts-dejavu-extra \
+  fonts-liberation \
+  fonts-liberation2 \
+  ttf-mscorefonts-installer \
+  && fc-cache -f -v \
+  && rm -rf /var/lib/apt/lists/*
+
 # Install uv (Python package manager)
 RUN curl -Ls https://astral.sh/uv/install.sh | bash \
   && (mv /root/.cargo/bin/uv /usr/local/bin/uv || mv /root/.local/bin/uv /usr/local/bin/uv || true)

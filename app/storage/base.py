@@ -11,13 +11,16 @@ class ImageStorageBase(ABC):
     """Abstract base class for image storage implementations"""
 
     @abstractmethod
-    def save_image(self, image_data: bytes, format: str = "png") -> str:
+    def save_image(
+        self, image_data: bytes, format: str = "png", group: Optional[str] = None
+    ) -> str:
         """
         Save image data and return a unique identifier
 
         Args:
             image_data: Raw image bytes
             format: Image format (png, jpg, svg, pdf, etc.)
+            group: Optional group name for access control
 
         Returns:
             Unique identifier (e.g., GUID, key, path) for the saved image
@@ -28,42 +31,49 @@ class ImageStorageBase(ABC):
         pass
 
     @abstractmethod
-    def get_image(self, identifier: str) -> Optional[Tuple[bytes, str]]:
+    def get_image(
+        self, identifier: str, group: Optional[str] = None
+    ) -> Optional[Tuple[bytes, str]]:
         """
         Retrieve image data by identifier
 
         Args:
             identifier: Unique identifier for the image
+            group: Optional group name for access control
 
         Returns:
             Tuple of (image_data, format) or None if not found
 
         Raises:
-            ValueError: If identifier format is invalid
+            ValueError: If identifier format is invalid or group mismatch
             RuntimeError: If retrieval fails
         """
         pass
 
     @abstractmethod
-    def delete_image(self, identifier: str) -> bool:
+    def delete_image(self, identifier: str, group: Optional[str] = None) -> bool:
         """
         Delete image by identifier
 
         Args:
             identifier: Unique identifier for the image
+            group: Optional group name for access control
 
         Returns:
             True if deleted, False if not found
 
         Raises:
-            ValueError: If identifier format is invalid
+            ValueError: If identifier format is invalid or group mismatch
         """
         pass
 
     @abstractmethod
-    def list_images(self) -> List[str]:
+    def list_images(self, group: Optional[str] = None) -> List[str]:
         """
         List all stored image identifiers
+
+        Args:
+            group: Optional group name to filter by
 
         Returns:
             List of identifier strings
@@ -71,12 +81,13 @@ class ImageStorageBase(ABC):
         pass
 
     @abstractmethod
-    def exists(self, identifier: str) -> bool:
+    def exists(self, identifier: str, group: Optional[str] = None) -> bool:
         """
         Check if an image exists
 
         Args:
             identifier: Unique identifier for the image
+            group: Optional group name for access control
 
         Returns:
             True if image exists, False otherwise

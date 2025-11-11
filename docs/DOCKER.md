@@ -6,9 +6,19 @@ This directory contains Docker configurations for the gplot graph rendering serv
 
 The Docker setup uses a multi-stage approach with UV for Python package management:
 
-1. **Base Image** (`gplot_base`): Ubuntu 22.04 with Python 3.11 and UV installed
+1. **Base Image** (`gplot_base`): Ubuntu 22.04 with Python 3.11, UV, and fonts for matplotlib
 2. **Development Image** (`gplot_dev`): Includes Git, GitHub CLI, SSH for VS Code remote development
 3. **Production Image** (`gplot_prod`): Minimal image with only runtime dependencies
+
+### Fonts in Base Image
+
+The base image includes comprehensive font support for matplotlib rendering:
+- **Microsoft Core Fonts**: Arial, Times New Roman, Courier, etc.
+- **Liberation Fonts**: Open-source alternatives to Arial, Times, Courier
+- **DejaVu Fonts**: Default sans-serif, serif, and monospace fonts
+- **Font Configuration**: `fontconfig` package for font management
+
+These fonts ensure professional chart rendering with proper fallbacks for all themes.
 
 ## Prerequisites
 
@@ -72,14 +82,31 @@ From VS Code:
 
 ### Production Container
 
-Run the MCP server:
+Use the provided script for production deployment (recommended):
 ```bash
-docker run -d --name gplot_prod -p 8000:8000 gplot_prod:latest
+./docker/run-prod.sh [WEB_PORT] [MCP_PORT]
+# Example: ./docker/run-prod.sh 9000 9001
 ```
 
-Run the web server:
+This script automatically:
+- Creates persistent data directory at `~/gplot_data`
+- Mounts data directory for persistent storage
+- Creates gplot_net Docker network
+- Exposes configurable ports (default 8000, 8001)
+
+**Manual deployment:**
 ```bash
-docker run -d --name gplot_prod -p 8000:8000 gplot_prod:latest python -m app.web_server
+# Create data directory for persistence
+mkdir -p ~/gplot_data/{auth,storage}
+
+# Run with persistent data volume
+docker run -d \
+  --name gplot_prod \
+  --network gplot_net \
+  -v ~/gplot_data:/home/gplot/devroot/gplot/data \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  gplot_prod:latest
 ```
 
 ## Using UV Inside Containers
@@ -102,10 +129,10 @@ uv add <package-name>
 uv add --dev <package-name>
 
 # Run the MCP server
-python -m app.mcp_server
+python -m app.main_mcp
 
 # Run the web server
-python -m app.main
+python -m app.main_web
 ```
 
 ### Production Container
@@ -129,9 +156,55 @@ Dependencies are pre-installed during the image build. The production image is r
 ### Production Container
 ```
 /home/gplot/
-├── app/                    # Application code
-├── pyproject.toml          # Project configuration
-└── .venv/                  # UV virtual environment with installed deps
+├── devroot/gplot/
+│   ├── app/                # Application code
+│   ├── data/              # Persistent data (mounted from host)
+│   │   ├── auth/         # JWT tokens
+│   │   └── storage/      # Rendered images
+│   ├── pyproject.toml    # Project configuration
+│   └── .venv/            # UV virtual environment with installed deps
+```
+
+**Note**: The `data/` directory should be mounted from the host for persistent storage.
+
+## Data Persistence
+
+### Development Container
+The development container mounts your entire project directory, so all data is automatically persisted on your host machine at `~/gplot/data/`.
+
+### Production Container
+The production container uses a separate data directory (`~/gplot_data/`) mounted as a volume:
+
+**Structure:**
+```
+~/gplot_data/
+├── auth/
+│   └── tokens.json      # JWT token-to-group mappings
+└── storage/
+    ├── metadata.json    # Image metadata
+    └── *.{png,svg,pdf}  # Rendered images
+```
+
+**Configuration:**
+You can override the data directory location using the `GPLOT_DATA_DIR` environment variable:
+
+```bash
+docker run -d \
+  --name gplot_prod \
+  -e GPLOT_DATA_DIR=/data/gplot \
+  -v /host/path/to/data:/data/gplot \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  gplot_prod:latest
+```
+
+**Backup:**
+```bash
+# Backup data
+tar -czf gplot_data_backup_$(date +%Y%m%d).tar.gz ~/gplot_data/
+
+# Restore data
+tar -xzf gplot_data_backup_YYYYMMDD.tar.gz -C ~/
 ```
 
 ## Environment Variables
@@ -140,6 +213,7 @@ The containers use these environment variables:
 
 - `VIRTUAL_ENV=/home/gplot/.venv`
 - `PATH=/home/gplot/.venv/bin:$PATH`
+- `GPLOT_DATA_DIR` (optional): Override default data directory location
 
 This ensures all Python commands use the UV-managed virtual environment.
 

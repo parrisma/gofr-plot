@@ -2,11 +2,15 @@ from typing import Dict
 from .base import Theme
 from .light import LightTheme
 from .dark import DarkTheme
+from .bizlight import BizLightTheme
+from .bizdark import BizDarkTheme
 
 # Registry of available themes
 _THEMES: Dict[str, Theme] = {
     "light": LightTheme(),
     "dark": DarkTheme(),
+    "bizlight": BizLightTheme(),
+    "bizdark": BizDarkTheme(),
 }
 
 
@@ -15,7 +19,7 @@ def get_theme(name: str = "light") -> Theme:
     Get a theme by name with safe fallback
 
     Args:
-        name: Theme name (light, dark)
+        name: Theme name (light, dark, bizlight, bizdark)
 
     Returns:
         Theme instance
@@ -60,6 +64,8 @@ __all__ = [
     "Theme",
     "LightTheme",
     "DarkTheme",
+    "BizLightTheme",
+    "BizDarkTheme",
     "get_theme",
     "register_theme",
     "list_themes",

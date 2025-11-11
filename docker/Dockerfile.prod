@@ -33,4 +33,4 @@ RUN uv pip install -e .
 EXPOSE 8000 8001
 
 # Default command to run the MCP server
-CMD ["python", "-m", "app.mcp_server"]
+CMD ["python", "-m", "app.main_mcp"]

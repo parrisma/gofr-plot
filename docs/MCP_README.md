@@ -17,18 +17,17 @@ The MCP server uses **Streamable HTTP** transport, which is the modern preferred
 Start the server using:
 
 ```bash
-python -m app.mcp_server
+python -m app.main_mcp
 ```
 
 The server will start on:
 - **Port 8001**: MCP Streamable HTTP endpoint at `http://localhost:8001/mcp`
 - **Port 8000**: HTTP REST API at `http://localhost:8000/render` (via web_server.py)
 
-Or make it executable and run directly:
+Or run directly:
 
 ```bash
-chmod +x app/mcp_server.py
-./app/mcp_server.py
+python app/main_mcp.py
 ```
 
 ## Available Tools
@@ -177,7 +176,7 @@ Add the server configuration:
   "mcpServers": {
     "gplot-renderer": {
       "command": "python",
-      "args": ["-m", "app.mcp_server"],
+      "args": ["-m", "app.main_mcp"],
       "cwd": "/home/parris3142/devroot/gplot"
     }
   }
@@ -196,7 +195,7 @@ When using proxy mode (`proxy=true`), images are stored on disk:
 To configure a custom storage location, set the environment variable:
 ```bash
 export GPLOT_STORAGE_DIR=/path/to/storage
-python -m app.mcp_server
+python -m app.main_mcp
 ```
 
 Or modify `app/storage.py` to change the default `storage_dir` parameter.

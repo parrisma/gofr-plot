@@ -6,7 +6,7 @@ Main renderer class that coordinates the rendering pipeline.
 import matplotlib.pyplot as plt
 import io
 import base64
-from typing import Dict
+from typing import Dict, Optional
 from app.graph_params import GraphParams
 from app.handlers import (
     GraphHandler,
@@ -32,12 +32,13 @@ class GraphRenderer:
         self.logger = ConsoleLogger(name="renderer", level=logging.INFO)
         self.logger.debug("GraphRenderer initialized", handlers=list(self.handlers.keys()))
 
-    def render(self, data: GraphParams) -> str | bytes:
+    def render(self, data: GraphParams, group: Optional[str] = None) -> str | bytes:
         """
         Render a graph based on the provided data
 
         Args:
             data: GraphParams containing all parameters for rendering
+            group: Optional group name for storage access control
 
         Returns:
             Base64-encoded string, raw bytes, or GUID string (proxy mode)
@@ -137,15 +138,18 @@ class GraphRenderer:
 
                 # Proxy mode: save to disk and return GUID
                 if data.proxy:
-                    self.logger.debug("Proxy mode: saving to storage", size_bytes=image_size)
+                    self.logger.debug(
+                        "Proxy mode: saving to storage", size_bytes=image_size, group=group
+                    )
                     storage = get_storage()
-                    guid = storage.save_image(image_data, data.format)
+                    guid = storage.save_image(image_data, data.format, group=group)
                     self.logger.info(
                         "Render completed (proxy mode)",
                         chart_type=data.type,
                         format=data.format,
                         output_size_bytes=image_size,
                         guid=guid,
+                        group=group,
                     )
                     return guid
 

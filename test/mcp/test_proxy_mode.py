@@ -9,20 +9,24 @@ Tests:
 4. Test invalid GUID handling
 """
 
-import asyncio
 import sys
 from pathlib import Path
 
 # Add parent directory to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
 import logging
 
 
-async def test_proxy_mode():
+MCP_URL = "http://localhost:8001/mcp/"
+
+
+@pytest.mark.asyncio
+async def test_render_with_proxy_mode_returns_guid(test_jwt_token):
     """Test proxy mode end-to-end"""
     logger = ConsoleLogger(name="proxy_test", level=logging.INFO)
     logger.info("Starting proxy mode tests")
@@ -43,6 +47,7 @@ async def test_proxy_mode():
                 "type": "line",
                 "format": "png",
                 "proxy": True,
+                "token": test_jwt_token,
             }
 
             result = await session.call_tool("render_graph", render_args)
@@ -65,7 +70,7 @@ async def test_proxy_mode():
 
             # Test 2: Retrieve image using get_image tool
             logger.info("Test 2: Retrieving image by GUID")
-            get_args = {"guid": guid}
+            get_args = {"guid": guid, "token": test_jwt_token}
 
             result = await session.call_tool("get_image", get_args)
 
@@ -86,7 +91,7 @@ async def test_proxy_mode():
             # Test 3: Try to retrieve non-existent GUID
             logger.info("Test 3: Testing invalid GUID handling")
             invalid_guid = "00000000-0000-0000-0000-000000000000"
-            get_args = {"guid": invalid_guid}
+            get_args = {"guid": invalid_guid, "token": test_jwt_token}
 
             result = await session.call_tool("get_image", get_args)
 
@@ -120,14 +125,3 @@ async def test_proxy_mode():
             logger.info("=" * 60)
             logger.info("All proxy mode tests passed!")
             logger.info("=" * 60)
-
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(test_proxy_mode())
-    except Exception as e:
-        print(f"Test failed: {str(e)}", file=sys.stderr)
-        import traceback
-
-        traceback.print_exc()
-        sys.exit(1)

@@ -61,7 +61,8 @@ docs/_build/
 # Jupyter
 .ipynb_checkpoints/
 
-# Docker (don't copy docker files into image)
-docker/
+# Docker (don't copy docker files into image, except entrypoint scripts)
+docker/*
+!docker/entrypoint*.sh
 Dockerfile*
 .dockerignore

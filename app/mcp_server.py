@@ -36,10 +36,12 @@ from app.render import GraphRenderer
 from app.graph_params import GraphParams
 from app.validation import GraphDataValidator
 from app.storage import get_storage
+from app.auth import AuthService
 from app.logger import ConsoleLogger
 import logging as python_logging
 from datetime import datetime
 import base64
+import os
 
 
 # Initialize the MCP server
@@ -48,6 +50,9 @@ renderer = GraphRenderer()
 validator = GraphDataValidator()
 storage = get_storage()
 logger = ConsoleLogger(name="mcp_server", level=python_logging.INFO)
+
+# Initialize auth service (will be configured when server starts)
+auth_service: AuthService | None = None
 
 
 @app.list_tools()
@@ -107,8 +112,12 @@ async def handle_list_tools() -> list[Tool]:
                         "description": "If true, save image to disk and return GUID instead of base64 (default: false)",
                         "default": False,
                     },
+                    "token": {
+                        "type": "string",
+                        "description": "JWT authentication token (required for all operations)",
+                    },
                 },
-                "required": ["title", "x", "y"],
+                "required": ["title", "x", "y", "token"],
             },
         ),
         Tool(
@@ -124,8 +133,12 @@ async def handle_list_tools() -> list[Tool]:
                         "type": "string",
                         "description": "The GUID of the image to retrieve (returned by render_graph with proxy=true)",
                     },
+                    "token": {
+                        "type": "string",
+                        "description": "JWT authentication token (required for all operations)",
+                    },
                 },
-                "required": ["guid"],
+                "required": ["guid", "token"],
             },
         ),
     ]
@@ -166,11 +179,39 @@ async def handle_call_tool(
                 )
             ]
 
+        if "token" not in arguments:
+            logger.warning("Missing required argument: token")
+            return [
+                TextContent(
+                    type="text",
+                    text="Error: Missing required argument 'token'\n\n"
+                    "JWT authentication token is required for all operations.",
+                )
+            ]
+
         guid = arguments["guid"]
+        token = arguments["token"]
+
+        # Verify JWT token
+        try:
+            if auth_service is None:
+                raise RuntimeError("Authentication service not initialized")
+            token_info = auth_service.verify_token(token)
+            group = token_info.group
+            logger.debug("Token verified", group=group)
+        except Exception as e:
+            logger.error("Token validation failed", error=str(e))
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Authentication Error: {str(e)}\n\n"
+                    "Provide a valid JWT token to access this resource.",
+                )
+            ]
 
         try:
-            # Retrieve image from storage
-            image_result = storage.get_image(guid)
+            # Retrieve image from storage with group access control
+            image_result = storage.get_image(guid, group=group)
 
             if image_result is None:
                 logger.warning("Image not found", guid=guid)
@@ -229,7 +270,7 @@ async def handle_call_tool(
 
     try:
         # Validate required arguments
-        required_args = ["title", "x", "y"]
+        required_args = ["title", "x", "y", "token"]
         missing_args = [arg for arg in required_args if arg not in arguments]
         if missing_args:
             logger.warning("Missing required arguments", missing=missing_args)
@@ -237,8 +278,26 @@ async def handle_call_tool(
                 TextContent(
                     type="text",
                     text=f"Missing required arguments: {', '.join(missing_args)}\n\n"
-                    f"Required: title, x (array), y (array)\n"
+                    f"Required: title, x (array), y (array), token (JWT)\n"
                     f"Optional: xlabel, ylabel, type, format, color, line_width, marker_size, alpha, theme",
+                )
+            ]
+
+        # Verify JWT token
+        token = arguments["token"]
+        try:
+            if auth_service is None:
+                raise RuntimeError("Authentication service not initialized")
+            token_info = auth_service.verify_token(token)
+            group = token_info.group
+            logger.debug("Token verified", group=group)
+        except Exception as e:
+            logger.error("Token validation failed", error=str(e))
+            return [
+                TextContent(
+                    type="text",
+                    text=f"Authentication Error: {str(e)}\n\n"
+                    "Provide a valid JWT token to access this service.",
                 )
             ]
 
@@ -326,15 +385,16 @@ async def handle_call_tool(
                 )
             ]
 
-        # Render the graph (will be base64 string)
+        # Render the graph (will be base64 string or GUID)
         try:
-            logger.debug("Starting render")
-            base64_image = renderer.render(graph_data)
+            logger.debug("Starting render", group=group)
+            base64_image = renderer.render(graph_data, group=group)
             logger.info(
                 "Render completed successfully",
                 chart_type=graph_data.type,
                 format=graph_data.format,
                 output_size=len(base64_image) if isinstance(base64_image, (str, bytes)) else 0,
+                group=group,
             )
         except ValueError as e:
             logger.error("Configuration error", error=str(e), chart_type=graph_data.type)
@@ -528,41 +588,4 @@ async def main(host: str = "0.0.0.0", port: int = 8001):
         logger.info("Server stopped by user")
     except Exception as e:
         logger.critical("Fatal server error", error=str(e), error_type=type(e).__name__)
-        sys.exit(1)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(
-        description="gplot MCP Server - Graph rendering via Model Context Protocol"
-    )
-    parser.add_argument(
-        "--host",
-        type=str,
-        default="0.0.0.0",
-        help="Host address to bind to (default: 0.0.0.0)",
-    )
-    parser.add_argument(
-        "--port",
-        type=int,
-        default=8001,
-        help="Port number to listen on (default: 8001)",
-    )
-    args = parser.parse_args()
-
-    # Create logger for startup messages
-    from app.logger import ConsoleLogger
-    import logging
-
-    startup_logger = ConsoleLogger(name="startup", level=logging.INFO)
-
-    try:
-        asyncio.run(main(host=args.host, port=args.port))
-    except KeyboardInterrupt:
-        startup_logger.info("Shutdown complete")
-        sys.exit(0)
-    except Exception as e:
-        startup_logger.error("Failed to start server", error=str(e))
         sys.exit(1)

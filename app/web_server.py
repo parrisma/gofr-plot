@@ -1,21 +1,28 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.responses import JSONResponse, Response, HTMLResponse
 from app.graph_params import GraphParams
 from app.render import GraphRenderer
 from app.validation import GraphDataValidator
 from app.storage import get_storage
+from app.auth import TokenInfo, verify_token, init_auth_service
 from app.logger import ConsoleLogger
 import logging
 from datetime import datetime
 import base64
+import os
+from typing import Optional
 
 
 class GraphWebServer:
-    def __init__(self):
+    def __init__(self, jwt_secret: Optional[str] = None, token_store_path: Optional[str] = None):
         self.app = FastAPI(title="gplot", description="Graph rendering service")
         self.renderer = GraphRenderer()
         self.validator = GraphDataValidator()
         self.storage = get_storage()
+
+        # Initialize auth service
+        init_auth_service(secret_key=jwt_secret, token_store_path=token_store_path)
+
         self.logger = ConsoleLogger(name="web_server", level=logging.INFO)
         self.logger.info("Web server initialized", version="1.0.0")
         self._setup_routes()
@@ -33,9 +40,10 @@ class GraphWebServer:
             )
 
         @self.app.post("/render")
-        async def render_graph(data: GraphParams):
+        async def render_graph(data: GraphParams, token_info: TokenInfo = Depends(verify_token)):
             """
             Render a graph with comprehensive error handling.
+            Requires JWT authentication.
 
             This endpoint ensures the server never crashes by catching all exceptions
             and returning appropriate HTTP error responses.
@@ -46,6 +54,7 @@ class GraphWebServer:
                 format=data.format,
                 theme=data.theme,
                 data_points=len(data.x) if data.x else 0,
+                group=token_info.group,
             )
 
             # Validate the input data
@@ -90,13 +99,14 @@ class GraphWebServer:
 
             # Render the graph
             try:
-                self.logger.debug("Starting render")
-                image_data = self.renderer.render(data)
+                self.logger.debug("Starting render", group=token_info.group)
+                image_data = self.renderer.render(data, group=token_info.group)
                 self.logger.info(
                     "Render completed successfully",
                     chart_type=data.type,
                     format=data.format,
                     output_size=len(image_data) if isinstance(image_data, (str, bytes)) else 0,
+                    group=token_info.group,
                 )
             except ValueError as e:
                 self.logger.error(
@@ -237,15 +247,16 @@ class GraphWebServer:
                 )
 
         @self.app.get("/render/{guid}")
-        async def get_image_by_guid(guid: str):
+        async def get_image_by_guid(guid: str, token_info: TokenInfo = Depends(verify_token)):
             """
             Retrieve a rendered image by its GUID.
             Returns the raw image bytes with appropriate content type.
+            Requires JWT authentication and group access.
             """
-            self.logger.info("Get image request", guid=guid)
+            self.logger.info("Get image request", guid=guid, group=token_info.group)
 
             try:
-                result = self.storage.get_image(guid)
+                result = self.storage.get_image(guid, group=token_info.group)
 
                 if result is None:
                     self.logger.warning("Image not found", guid=guid)
@@ -304,15 +315,16 @@ class GraphWebServer:
                 )
 
         @self.app.get("/render/{guid}/html")
-        async def get_image_html(guid: str):
+        async def get_image_html(guid: str, token_info: TokenInfo = Depends(verify_token)):
             """
             Retrieve a rendered image by its GUID and display it in an HTML page.
             Useful for viewing images directly in a browser.
+            Requires JWT authentication and group access.
             """
-            self.logger.info("Get image HTML request", guid=guid)
+            self.logger.info("Get image HTML request", guid=guid, group=token_info.group)
 
             try:
-                result = self.storage.get_image(guid)
+                result = self.storage.get_image(guid, group=token_info.group)
 
                 if result is None:
                     self.logger.warning("Image not found for HTML display", guid=guid)
