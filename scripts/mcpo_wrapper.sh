@@ -161,8 +161,8 @@ for i in {1..30}; do
     sleep 1
 done
 
-# Build MCPO command based on mode
-CMD="uv tool run mcpo --port ${MCPO_PORT} --server-type streamable-http"
+# Build MCPO command based on mode with debug logging enabled
+CMD="uv tool run mcpo --port ${MCPO_PORT} --server-type streamable-http --log-level debug"
 
 if [[ "${MODE}" == "auth" ]]; then
     CMD="${CMD} --api-key ${MCPO_API_KEY}"

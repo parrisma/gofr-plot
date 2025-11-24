@@ -42,7 +42,17 @@ if __name__ == "__main__":
         action="store_true",
         help="Disable authentication (WARNING: insecure, for development only)",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Logging level for all components (default: INFO)",
+    )
     args = parser.parse_args()
+
+    # Parse log level
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
 
     try:
         # Build settings from environment and CLI args
@@ -92,21 +102,62 @@ if __name__ == "__main__":
         ),  # Legacy parameter (ignored if auth_service provided)
         require_auth=require_auth,
         auth_service=auth_service_instance,  # Dependency injection
+        log_level=log_level,  # Pass log level to server
     )
 
     try:
+        # Print detailed startup banner
+        banner = f"""
+{'='*80}
+  gplot Web Server - Starting
+{'='*80}
+  Version:          1.0.0
+  Transport:        HTTP REST API
+  Host:             {settings.server.host}
+  Port:             {settings.server.web_port}
+  
+  Endpoints:
+    - API Docs:      http://{settings.server.host}:{settings.server.web_port}/docs
+    - Health Check:  http://{settings.server.host}:{settings.server.web_port}/ping
+    - Render:        http://{settings.server.host}:{settings.server.web_port}/render
+    - Proxy:         http://{settings.server.host}:{settings.server.web_port}/proxy/{{guid}}
+  
+  Container Network (from n8n/openwebui):
+    - gplot_dev:     http://gplot_dev:{settings.server.web_port}
+    - gplot_prod:    http://gplot_prod:{settings.server.web_port}
+  
+  Localhost Access:
+    - API Docs:      http://localhost:{settings.server.web_port}/docs
+    - Render:        curl -X POST http://localhost:{settings.server.web_port}/render
+    - Health:        curl http://localhost:{settings.server.web_port}/ping
+  
+  Authentication:   {'Enabled' if require_auth else 'Disabled'}
+  Token Store:      {settings.auth.token_store_path if require_auth else 'N/A'}
+  Storage Dir:      {settings.storage.storage_dir}
+{'='*80}
+        """
+        print(banner)
+
         logger.info(
             "Starting web server",
             host=settings.server.host,
             port=settings.server.web_port,
             transport="HTTP REST API",
             jwt_enabled=require_auth,
+            storage_dir=str(settings.storage.storage_dir),
+            token_store=str(settings.auth.token_store_path) if require_auth else None,
+        )
+        print(
+            f"\n✓ Web Server ready and accepting connections on http://{settings.server.host}:{settings.server.web_port}\n"
         )
         uvicorn.run(server.app, host=settings.server.host, port=settings.server.web_port)
         logger.info("Web server shutdown complete")
+        print("\n✓ Web Server shutdown complete\n")
     except KeyboardInterrupt:
         logger.info("Web server stopped by user")
+        print("\n✓ Web Server stopped by user\n")
         sys.exit(0)
     except Exception as e:
         logger.error("Failed to start web server", error=str(e), error_type=type(e).__name__)
+        print(f"\n✗ FATAL ERROR: Failed to start Web server: {str(e)}\n")
         sys.exit(1)

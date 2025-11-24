@@ -56,10 +56,20 @@ if __name__ == "__main__":
         default="url",
         help="Proxy mode response format: 'url' returns download URL, 'guid' returns only GUID (default: url)",
     )
+    parser.add_argument(
+        "--log-level",
+        type=str,
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+        help="Logging level for all components (default: INFO)",
+    )
     args = parser.parse_args()
 
+    # Parse log level
+    log_level = getattr(logging, args.log_level.upper(), logging.INFO)
+
     # Create logger for startup messages
-    startup_logger = ConsoleLogger(name="startup", level=logging.INFO)
+    startup_logger = ConsoleLogger(name="startup", level=log_level)
 
     try:
         # Build settings from environment and CLI args
@@ -108,6 +118,7 @@ if __name__ == "__main__":
     from app.mcp_server import mcp_server as mcp_server_module
 
     mcp_server_module.set_auth_service(auth_service)
+    mcp_server_module.set_logger_level(log_level)
 
     # Configure web URL and proxy mode
     if args.web_url:
@@ -116,7 +127,7 @@ if __name__ == "__main__":
 
     try:
         startup_logger.info(
-            "Starting MCP server",
+            "Initializing MCP server",
             host=settings.server.host,
             port=settings.server.mcp_port,
             transport="Streamable HTTP",
@@ -124,6 +135,7 @@ if __name__ == "__main__":
             web_url=mcp_server_module.web_url_override,
             proxy_url_mode=mcp_server_module.proxy_url_mode,
         )
+        # Startup banner will be printed by mcp_server.main()
         asyncio.run(
             mcp_server_module.main(host=settings.server.host, port=settings.server.mcp_port)
         )
@@ -133,4 +145,5 @@ if __name__ == "__main__":
         sys.exit(0)
     except Exception as e:
         startup_logger.error("Failed to start server", error=str(e), error_type=type(e).__name__)
+        print(f"\n✗ FATAL ERROR: Failed to initialize MCP server: {str(e)}\n")
         sys.exit(1)

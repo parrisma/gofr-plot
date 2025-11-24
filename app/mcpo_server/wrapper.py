@@ -81,11 +81,39 @@ class MCPOWrapper:
         cmd = self._build_mcpo_command()
 
         mode = "authenticated" if self.use_auth else "public (no auth)"
+
+        # Print detailed startup banner
+        banner = f"""
+{'='*80}
+  gplot MCPO Wrapper - Starting
+{'='*80}
+  Mode:             {mode.upper()}
+  MCPO Port:        {self.mcpo_port}
+  MCP Target:       http://{self.mcp_host}:{self.mcp_port}/mcp
+  API Key:          {'Configured' if self.mcpo_api_key else 'None (public access)'}
+  JWT Token:        {'Configured' if self.auth_token else 'None'}
+  
+  OpenAPI Endpoints:
+    - OpenAPI Spec:  http://localhost:{self.mcpo_port}/openapi.json
+    - Health Check:  http://localhost:{self.mcpo_port}/health
+    - Tools List:    http://localhost:{self.mcpo_port}/tools/list
+  
+  Container Network (from openwebui):
+    - gplot_dev:     http://gplot_dev:{self.mcpo_port}
+    - gplot_prod:    http://gplot_prod:{self.mcpo_port}
+  
+  Command: {' '.join(cmd)}
+{'='*80}
+        """
+        print(banner)
+
         logger.info(
             f"Starting MCPO wrapper in {mode} mode",
             mcp_url=f"http://{self.mcp_host}:{self.mcp_port}/mcp",
             mcpo_port=self.mcpo_port,
             use_auth=self.use_auth,
+            api_key_configured=self.mcpo_api_key is not None,
+            jwt_token_configured=self.auth_token is not None,
         )
 
         try:
@@ -95,26 +123,38 @@ class MCPOWrapper:
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            logger.info("MCPO proxy started", pid=self.process.pid)
+            logger.info("MCPO proxy started", pid=self.process.pid, command=" ".join(cmd))
+            print(f"\n✓ MCPO Wrapper started (PID: {self.process.pid})\n")
         except Exception as e:
-            logger.error("Failed to start MCPO proxy", error=str(e))
+            logger.error("Failed to start MCPO proxy", error=str(e), command=" ".join(cmd))
+            print(f"\n✗ FAILED to start MCPO: {str(e)}\n")
             raise
 
     def stop(self) -> None:
         """Stop the MCPO proxy server"""
         if self.process:
-            logger.info("Stopping MCPO proxy", pid=self.process.pid)
+            logger.info("Stopping MCPO proxy", pid=self.process.pid, mcpo_port=self.mcpo_port)
+            print(f"\nStopping MCPO Wrapper (PID: {self.process.pid})...")
             self.process.terminate()
             try:
                 self.process.wait(timeout=5)
+                logger.info("MCPO proxy terminated gracefully", pid=self.process.pid)
+                print("✓ MCPO Wrapper stopped gracefully\n")
             except subprocess.TimeoutExpired:
-                logger.warning("MCPO proxy did not terminate, killing")
+                logger.warning("MCPO proxy did not terminate, killing", pid=self.process.pid)
+                print("⚠ MCPO Wrapper did not terminate, forcing kill...")
                 self.process.kill()
+                print("✓ MCPO Wrapper killed\n")
             self.process = None
+        else:
+            logger.warning("Stop called but MCPO proxy was not running")
 
     def is_running(self) -> bool:
         """Check if MCPO proxy is running"""
-        return self.process is not None and self.process.poll() is None
+        running = self.process is not None and self.process.poll() is None
+        if running and self.process:
+            logger.debug("MCPO proxy status check", running=True, pid=self.process.pid)
+        return running
 
     async def run_async(self) -> None:
         """Run MCPO proxy and wait for it to complete"""

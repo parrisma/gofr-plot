@@ -75,8 +75,8 @@ if [[ "${NO_AUTH}" != "true" ]]; then
     fi
 fi
 
-# Build command
-CMD="uv run python app/main_web.py --host 0.0.0.0 --port ${PORT}"
+# Build command with DEBUG logging
+CMD="uv run python app/main_web.py --host 0.0.0.0 --port ${PORT} --log-level DEBUG"
 
 if [[ "${NO_AUTH}" == "true" ]]; then
     CMD="${CMD} --no-auth"

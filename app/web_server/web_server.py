@@ -11,6 +11,7 @@ from app.auth import (
     verify_token,
     optional_verify_token,
     init_auth_service,
+    get_auth_service,
     set_security_auditor,
 )
 from app.auth.service import AuthService
@@ -30,6 +31,7 @@ class GraphWebServer:
         token_store_path: Optional[str] = None,
         require_auth: bool = True,
         auth_service: Optional["AuthService"] = None,  # Type hint quoted for forward reference
+        log_level: int = logging.INFO,
     ):
         """
         Initialize GraphWebServer
@@ -39,6 +41,7 @@ class GraphWebServer:
             token_store_path: Path to token store (deprecated - use auth_service instead)
             require_auth: Whether authentication is required
             auth_service: AuthService instance (preferred - enables dependency injection)
+            log_level: Logging level (logging.DEBUG, logging.INFO, etc.)
         """
         self.app = FastAPI(title="gplot", description="Graph rendering service")
 
@@ -70,15 +73,12 @@ class GraphWebServer:
             allow_headers=["*"],  # Allow all headers (including Authorization)
         )
 
-        is_test_env = os.getenv("GPLOT_JWT_SECRET", "").startswith("test-secret")
-        self.render_limit = 1000 if is_test_env else 10
+        # Initialize rate limiter with production defaults
+        # Will be reconfigured based on auth service configuration
+        self.render_limit = 10
         self.rate_limiter = RateLimiter(default_limit=100, window=60)
-        self.rate_limiter.set_endpoint_limit(
-            "/render", limit=self.render_limit, window=60
-        )  # Strict for expensive ops
-        self.rate_limiter.set_endpoint_limit(
-            "/ping", limit=1000, window=60
-        )  # Lenient for health checks
+        self.rate_limiter.set_endpoint_limit("/render", limit=10, window=60)
+        self.rate_limiter.set_endpoint_limit("/ping", limit=1000, window=60)
 
         # Initialize security auditor
         self.security_auditor = SecurityAuditor()
@@ -93,12 +93,36 @@ class GraphWebServer:
                 # Legacy path: create AuthService from jwt_secret and token_store_path
                 init_auth_service(secret_key=jwt_secret, token_store_path=token_store_path)
 
-        self.logger = ConsoleLogger(name="web_server", level=logging.INFO)
+        # Reconfigure rate limiter based on auth service configuration
+        # If JWT secret starts with "test-secret", use much higher limits for testing
+        is_test_env = False
+        if require_auth:
+            # Only check auth service if authentication is enabled
+            try:
+                auth_svc = get_auth_service()
+                if auth_svc and hasattr(auth_svc, "secret_key"):
+                    is_test_env = auth_svc.secret_key.startswith("test-secret")
+            except RuntimeError:
+                # Auth service not initialized yet, check environment variable
+                is_test_env = os.getenv("GPLOT_JWT_SECRET", "").startswith("test-secret")
+        else:
+            # No auth means we check environment variable directly
+            is_test_env = os.getenv("GPLOT_JWT_SECRET", "").startswith("test-secret")
+
+        if is_test_env:
+            self.render_limit = 10000
+            self.rate_limiter.default_limit = 1000
+            self.rate_limiter.set_endpoint_limit("/render", limit=10000, window=60)
+
+        self.logger = ConsoleLogger(name="web_server", level=log_level)
         self.logger.info(
             "Web server initialized",
             version="1.0.0",
             authentication_enabled=require_auth,
             auth_service_injected=auth_service is not None,
+            environment="test" if is_test_env else "production",
+            render_limit=self.render_limit,
+            default_rate_limit=self.rate_limiter.default_limit,
         )
         self._setup_routes()
 
@@ -160,6 +184,17 @@ class GraphWebServer:
             """
             # Rate limiting (strict for expensive operations)
             client_id = self._get_client_id(request, token_info)
+
+            # Log every incoming render request for request tracing
+            self.logger.info(
+                "POST /render request received",
+                client_id=client_id,
+                proxy_mode=data.proxy,
+                chart_type=data.type,
+                format=data.format,
+                title=data.title[:50] if data.title else None,
+                timestamp=datetime.now().isoformat(),
+            )
             try:
                 self.rate_limiter.check_limit(client_id=client_id, endpoint="/render")
             except RateLimitExceeded as e:
@@ -347,7 +382,30 @@ class GraphWebServer:
                         from uuid import UUID
 
                         UUID(image_data)
-                        # It's a GUID, return JSON with GUID
+                        # It's a GUID, verify it was actually saved before returning
+                        self.logger.debug("Verifying GUID was saved to storage", guid=image_data)
+                        result = self.storage.get_image(image_data, group=group)
+
+                        if result is None:
+                            self.logger.error(
+                                "GUID generated but image not found in storage",
+                                guid=image_data,
+                                group=group,
+                            )
+                            raise HTTPException(
+                                status_code=500,
+                                detail={
+                                    "error": "Storage failure",
+                                    "message": "Image was rendered but failed to persist to storage",
+                                    "suggestions": [
+                                        "Storage directory may be inaccessible",
+                                        "Disk space may be insufficient",
+                                        "Check server logs for details",
+                                    ],
+                                },
+                            )
+
+                        # Image exists in storage, return GUID
                         self.logger.debug("Returning GUID response (proxy mode)", guid=image_data)
                         return JSONResponse(
                             content={

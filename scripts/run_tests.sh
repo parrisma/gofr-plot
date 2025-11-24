@@ -118,7 +118,7 @@ cleanup_environment() {
 }
 
 start_mcp_server() {
-    local log_file="/tmp/gplot_mcp_test.log"
+    local log_file="${PROJECT_ROOT}/logs/gplot_mcp_test.log"
     echo -e "${YELLOW}Starting MCP server on port ${GPLOT_MCP_PORT}...${NC}"
     
     free_port "${GPLOT_MCP_PORT}"
@@ -156,7 +156,7 @@ start_mcp_server() {
 }
 
 start_web_server() {
-    local log_file="/tmp/gplot_web_test.log"
+    local log_file="${PROJECT_ROOT}/logs/gplot_web_test.log"
     echo -e "${YELLOW}Starting Web server on port ${GPLOT_WEB_PORT}...${NC}"
     
     free_port "${GPLOT_WEB_PORT}"
@@ -192,7 +192,7 @@ start_web_server() {
 }
 
 start_mcpo_server() {
-    local log_file="/tmp/gplot_mcpo_test.log"
+    local log_file="${PROJECT_ROOT}/logs/gplot_mcpo_test.log"
     echo -e "${YELLOW}Starting MCPO wrapper on port ${GPLOT_MCPO_PORT}...${NC}"
     
     free_port "${GPLOT_MCPO_PORT}"
@@ -367,10 +367,10 @@ if [ $TEST_EXIT_CODE -eq 0 ]; then
 else
     echo -e "${RED}=== Tests Failed (exit code: ${TEST_EXIT_CODE}) ===${NC}"
     echo "Server logs:"
-    echo "  MCP: /tmp/gplot_mcp_test.log"
-    echo "  Web: /tmp/gplot_web_test.log"
+    echo "  MCP: ${PROJECT_ROOT}/logs/gplot_mcp_test.log"
+    echo "  Web: ${PROJECT_ROOT}/logs/gplot_web_test.log"
     if [ "$START_MCPO" = true ]; then
-        echo "  MCPO: /tmp/gplot_mcpo_test.log"
+        echo "  MCPO: ${PROJECT_ROOT}/logs/gplot_mcpo_test.log"
     fi
 fi
 

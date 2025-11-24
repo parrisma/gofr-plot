@@ -160,3 +160,4 @@ Thumbs.db
 *.tmp
 *.bak
 test/data/
+*Zone.Identifier

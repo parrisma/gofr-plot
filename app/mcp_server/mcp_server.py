@@ -62,13 +62,10 @@ logger = ConsoleLogger(name="mcp_server", level=python_logging.INFO)
 
 # Initialize rate limiter with endpoint-specific limits
 # Use higher limits in test environment to avoid test failures
+# Default to production limits; will be reconfigured when auth service is set
 
-is_test_env = os.getenv("GPLOT_JWT_SECRET", "").startswith("test-secret")
-render_limit = 1000 if is_test_env else 10
 rate_limiter = RateLimiter(default_limit=100, window=60)
-rate_limiter.set_endpoint_limit(
-    "render_graph", limit=render_limit, window=60
-)  # Strict for expensive ops
+rate_limiter.set_endpoint_limit("render_graph", limit=10, window=60)  # Strict for expensive ops
 rate_limiter.set_endpoint_limit("ping", limit=1000, window=60)  # Lenient for health checks
 
 # Initialize security auditor
@@ -82,6 +79,17 @@ web_url_override: str | None = None
 proxy_url_mode: str = "url"  # "url" or "guid"
 
 
+def set_logger_level(level: int) -> None:
+    """
+    Set the logger level for the MCP server
+
+    Args:
+        level: Logging level (e.g., logging.DEBUG, logging.INFO)
+    """
+    global logger
+    logger = ConsoleLogger(name="mcp_server", level=level)
+
+
 def set_auth_service(service: AuthService | None) -> None:
     """
     Set the module-level auth service instance (dependency injection)
@@ -91,6 +99,28 @@ def set_auth_service(service: AuthService | None) -> None:
     """
     global auth_service
     auth_service = service
+
+    # Reconfigure rate limiter based on auth service configuration
+    # If JWT secret starts with "test-secret", use much higher limits for testing
+    is_test_env = False
+    if service and hasattr(service, "secret_key"):
+        is_test_env = service.secret_key.startswith("test-secret")
+    elif not service:
+        # No auth means we check environment variable
+        is_test_env = os.getenv("GPLOT_JWT_SECRET", "").startswith("test-secret")
+
+    if is_test_env:
+        logger.info(
+            "Test environment detected, using higher rate limits",
+            render_limit=10000,
+            default_limit=1000,
+        )
+        rate_limiter.default_limit = 1000
+        rate_limiter.set_endpoint_limit("render_graph", limit=10000, window=60)
+    else:
+        logger.info(
+            "Production environment, using standard rate limits", render_limit=10, default_limit=100
+        )
 
 
 @app.list_tools()
@@ -363,6 +393,16 @@ async def handle_call_tool(
     token = arguments.get("token", "anonymous")
     client_id = f"token:{token[:20]}" if token != "anonymous" else "anonymous"
 
+    # Log every incoming tool request for request tracing
+    logger.info(
+        "MCP tool request received",
+        tool_name=name,
+        client_id=client_id,
+        has_token=(token != "anonymous"),
+        argument_count=len(arguments),
+        timestamp=datetime.now().isoformat(),
+    )
+
     if name == "ping":
         logger.info("Ping tool called")
 
@@ -588,14 +628,28 @@ async def handle_call_tool(
         )
 
     logger.info("Render tool called")
+    logger.debug(
+        "Render request received",
+        arguments_keys=list(arguments.keys()),
+        proxy=arguments.get("proxy", False),
+        chart_type=arguments.get("type", "line"),
+        format=arguments.get("format", "png"),
+    )
 
     # Rate limiting (strict for expensive operations)
     try:
         rate_limiter.check_limit(client_id=client_id, endpoint="render_graph")
     except RateLimitExceeded as e:
         logger.warning("Rate limit exceeded", client_id=client_id, endpoint="render_graph")
+        # Get the actual limit from rate_limiter
+        endpoint_limit = rate_limiter.endpoint_limits.get(
+            "render_graph", (rate_limiter.default_limit, 60)
+        )
         security_auditor.log_rate_limit(
-            client_id=client_id, endpoint="render_graph", limit=render_limit, window=60
+            client_id=client_id,
+            endpoint="render_graph",
+            limit=endpoint_limit[0],
+            window=endpoint_limit[1],
         )
         return format_error(
             "Rate Limit Exceeded",
@@ -813,6 +867,30 @@ async def handle_call_tool(
         if is_proxy:
             # Proxy mode: base64_image is actually a GUID string
             guid = str(base64_image)
+
+            # CRITICAL: Verify the image was actually saved to storage before returning GUID
+            logger.debug("Verifying image was saved to storage", guid=guid, group=group)
+            verification = storage.get_image(guid, group=group)
+
+            if verification is None:
+                logger.error(
+                    "CRITICAL: Renderer returned GUID but image not found in storage",
+                    guid=guid,
+                    group=group,
+                    timestamp=datetime.now().isoformat(),
+                )
+                return format_error(
+                    "Storage Verification Failed",
+                    f"Image was rendered but could not be verified in storage (GUID: {guid})",
+                    [
+                        "This indicates a storage persistence failure",
+                        "Check storage directory permissions and disk space",
+                        "Check server logs for storage errors",
+                    ],
+                    {"guid": guid, "group": group},
+                )
+
+            logger.debug("Storage verification PASSED", guid=guid, size=len(verification[0]))
             logger.info(
                 "Returning GUID response (proxy mode)",
                 title=graph_data.title,
@@ -827,7 +905,10 @@ async def handle_call_tool(
 
             if proxy_url_mode == "url":
                 # Construct full web server URL
-                web_base = web_url_override or os.getenv("GPLOT_WEB_URL", "http://localhost:8000")
+                import socket
+
+                hostname = socket.gethostname()
+                web_base = web_url_override or os.getenv("GPLOT_WEB_URL", f"http://{hostname}:8000")
                 download_url = f"{web_base}/proxy/{guid}"
                 response_text += f"Download URL: {download_url}\n"
                 response_text += f"(Or use get_image tool with guid='{guid}')"
@@ -968,12 +1049,44 @@ async def main(host: str = "0.0.0.0", port: int = 8001):
     """
     import uvicorn
 
+    # Print detailed startup banner
+    banner = f"""
+{'='*80}
+  gplot MCP Server - Starting
+{'='*80}
+  Version:          1.0.0
+  Transport:        Streamable HTTP (MCP Protocol)
+  Host:             {host}
+  Port:             {port}
+  
+  Endpoints:
+    - MCP Protocol:  http://{host}:{port}/mcp/
+    - Health Check:  http://{host}:{port}/health
+  
+  Container Network (from n8n/openwebui):
+    - gplot_dev:     http://gplot_dev:{port}/mcp/
+    - gplot_prod:    http://gplot_prod:{port}/mcp/
+  
+  Localhost Access:
+    - Local:         http://localhost:{port}/mcp/
+    - Health:        curl http://localhost:{port}/health
+  
+  Authentication:   {'Enabled' if auth_service else 'Disabled'}
+  Web URL:          {web_url_override or 'http://localhost:8000'}
+  Proxy Mode:       {proxy_url_mode}
+{'='*80}
+    """
+    print(banner)
+
     logger.info(
         "Starting MCP Streamable HTTP server",
         version="1.0.0",
         host=host,
         port=port,
         transport="Streamable HTTP",
+        auth_enabled=auth_service is not None,
+        web_url=web_url_override or "http://localhost:8000",
+        proxy_mode=proxy_url_mode,
     )
     try:
         config = uvicorn.Config(
@@ -984,11 +1097,14 @@ async def main(host: str = "0.0.0.0", port: int = 8001):
         )
         server = uvicorn.Server(config)
         logger.info(f"Server initialized, listening on http://{host}:{port}/mcp/", endpoint="/mcp/")
+        print(f"\n✓ MCP Server ready and accepting connections on http://{host}:{port}/mcp/\n")
         await server.serve()
         logger.info("Server shutdown complete")
     except KeyboardInterrupt:
         # Handle graceful shutdown
         logger.info("Server stopped by user")
+        print("\n✓ MCP Server shutdown complete\n")
     except Exception as e:
         logger.critical("Fatal server error", error=str(e), error_type=type(e).__name__)
+        print(f"\n✗ FATAL ERROR: {str(e)}\n")
         sys.exit(1)

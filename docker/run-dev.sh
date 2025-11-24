@@ -48,8 +48,8 @@ docker run -d \
 -v "$HOME/devroot/gplot":/home/gplot/devroot/gplot \
 -v "$HOME/.ssh:/home/gplot/.ssh:ro" \
 -v gplot_data_dev:/home/gplot/devroot/gplot/data \
--p $WEB_PORT:8000 \
--p $MCP_PORT:8001 \
+-p 0.0.0.0:$WEB_PORT:8000 \
+-p 0.0.0.0:$MCP_PORT:8001 \
 gplot_dev:latest
 
 if docker ps -q -f name=gplot_dev | grep -q .; then
