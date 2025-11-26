@@ -1,14 +1,14 @@
 import uvicorn
 import argparse
 import sys
-from pathlib import Path
 from app.settings import Settings
 from app.web_server.web_server import GraphWebServer
 from app.auth.service import AuthService
+from app.startup import resolve_auth_config
 from app.logger import ConsoleLogger
 import logging
 
-logger = ConsoleLogger(name="main", level=logging.INFO)
+logger = ConsoleLogger(name="main_web", level=logging.INFO)
 
 if __name__ == "__main__":
     # Parse command line arguments
@@ -55,8 +55,15 @@ if __name__ == "__main__":
     log_level = getattr(logging, args.log_level.upper(), logging.INFO)
 
     try:
+        # Resolve authentication configuration using centralized resolver
+        jwt_secret, token_store_path, require_auth = resolve_auth_config(
+            jwt_secret=args.jwt_secret,
+            token_store_path=args.token_store,
+            require_auth=not args.no_auth,
+            allow_auto_secret=True,
+        )
+
         # Build settings from environment and CLI args
-        require_auth = not args.no_auth
         settings = Settings.from_env(require_auth=require_auth)
 
         # Override with CLI arguments if provided
@@ -64,10 +71,12 @@ if __name__ == "__main__":
             settings.server.host = args.host
         if args.port:
             settings.server.web_port = args.port
-        if args.jwt_secret:
-            settings.auth.jwt_secret = args.jwt_secret
-        if args.token_store:
-            settings.auth.token_store_path = Path(args.token_store)
+
+        # Use resolved auth configuration
+        if require_auth:
+            settings.auth.jwt_secret = jwt_secret
+            settings.auth.token_store_path = token_store_path
+            settings.auth.require_auth = True
 
         # Resolve defaults and validate
         settings.resolve_defaults()
@@ -85,8 +94,8 @@ if __name__ == "__main__":
     auth_service_instance = None
     if require_auth:
         auth_service_instance = AuthService(
-            secret_key=settings.auth.jwt_secret,
-            token_store_path=str(settings.auth.token_store_path),
+            secret_key=jwt_secret,
+            token_store_path=str(token_store_path),
         )
         logger.info(
             "Authentication service created",

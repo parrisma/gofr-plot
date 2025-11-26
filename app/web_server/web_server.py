@@ -405,17 +405,39 @@ class GraphWebServer:
                                 },
                             )
 
-                        # Image exists in storage, return GUID
-                        self.logger.debug("Returning GUID response (proxy mode)", guid=image_data)
-                        return JSONResponse(
-                            content={
-                                "guid": image_data,
-                                "format": data.format,
-                                "message": f"Image saved with GUID: {image_data}",
-                                "retrieve_url": f"/proxy/{image_data}",
-                                "html_url": f"/proxy/{image_data}/html",
-                            }
+                        # Image exists in storage, register alias if provided
+                        guid = image_data
+                        alias_registered = None
+                        if data.alias:
+                            try:
+                                self.storage.register_alias(data.alias, guid, group)
+                                alias_registered = data.alias
+                                self.logger.info(
+                                    "Alias registered", alias=data.alias, guid=guid, group=group
+                                )
+                            except ValueError as e:
+                                self.logger.warning(
+                                    "Failed to register alias", alias=data.alias, error=str(e)
+                                )
+                                # Continue without alias - image was saved successfully
+
+                        # Build response
+                        self.logger.debug(
+                            "Returning GUID response (proxy mode)",
+                            guid=guid,
+                            alias=alias_registered,
                         )
+                        response_content = {
+                            "guid": guid,
+                            "format": data.format,
+                            "message": f"Image saved with GUID: {guid}",
+                            "retrieve_url": f"/proxy/{guid}",
+                            "html_url": f"/proxy/{guid}/html",
+                        }
+                        if alias_registered:
+                            response_content["alias"] = alias_registered
+                            response_content["alias_url"] = f"/proxy/{alias_registered}"
+                        return JSONResponse(content=response_content)
                     except ValueError:
                         # Not a GUID, it's base64
                         image_data = base64.b64decode(image_data)
@@ -443,22 +465,25 @@ class GraphWebServer:
                     },
                 )
 
-        @self.app.get("/proxy/{guid}")
-        async def get_image_by_guid(
-            request: Request, guid: str, token_info: Optional[TokenInfo] = Depends(auth_dep)
+        @self.app.get("/proxy/{identifier}")
+        async def get_image_by_identifier(
+            request: Request, identifier: str, token_info: Optional[TokenInfo] = Depends(auth_dep)
         ):
             """
-            Retrieve a rendered image by its GUID.
+            Retrieve a rendered image by its GUID or alias.
             Returns the raw image bytes with appropriate content type.
             Requires JWT authentication and group access (unless --no-auth is used).
+
+            Args:
+                identifier: Either a GUID (UUID format) or an alias (friendly name)
             """
             # Rate limiting (use default limit)
             client_id = self._get_client_id(request, token_info)
             try:
-                self.rate_limiter.check_limit(client_id=client_id, endpoint="/proxy/{guid}")
+                self.rate_limiter.check_limit(client_id=client_id, endpoint="/proxy/{identifier}")
             except RateLimitExceeded as e:
                 self.logger.warning(
-                    "Rate limit exceeded", client_id=client_id, endpoint="/proxy/{guid}"
+                    "Rate limit exceeded", client_id=client_id, endpoint="/proxy/{identifier}"
                 )
                 return JSONResponse(
                     status_code=429,
@@ -471,9 +496,26 @@ class GraphWebServer:
                 )
 
             group = token_info.group if token_info else "public"
-            self.logger.info("Get image request", guid=guid, group=group)
+            self.logger.info("Get image request", identifier=identifier, group=group)
 
             try:
+                # Resolve identifier (alias or GUID) to GUID
+                guid = self.storage.resolve_identifier(identifier, group=group)
+                if guid is None:
+                    self.logger.warning("Identifier not found", identifier=identifier, group=group)
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "Image not found",
+                            "message": f"No image found for identifier: {identifier}",
+                            "suggestions": [
+                                "Verify the GUID or alias is correct",
+                                "The image may have been deleted",
+                                "Aliases are group-specific",
+                            ],
+                        },
+                    )
+
                 result = self.storage.get_image(guid, group=group)
 
                 if result is None:
@@ -501,8 +543,14 @@ class GraphWebServer:
                     "bmp": "image/bmp",
                 }
 
+                # Include alias in response if available
+                alias = self.storage.get_alias(guid)
                 self.logger.info(
-                    "Image retrieved", guid=guid, format=img_format, size=len(image_data)
+                    "Image retrieved",
+                    guid=guid,
+                    alias=alias,
+                    format=img_format,
+                    size=len(image_data),
                 )
 
                 return Response(
@@ -514,7 +562,9 @@ class GraphWebServer:
             except HTTPException:
                 raise
             except PermissionDeniedError as e:
-                self.logger.warning("Permission denied", guid=guid, error=str(e), group=group)
+                self.logger.warning(
+                    "Permission denied", identifier=identifier, error=str(e), group=group
+                )
                 raise HTTPException(
                     status_code=403,
                     detail={
@@ -523,16 +573,16 @@ class GraphWebServer:
                     },
                 )
             except ValueError as e:
-                self.logger.error("Invalid GUID", guid=guid, error=str(e))
+                self.logger.error("Invalid identifier", identifier=identifier, error=str(e))
                 raise HTTPException(
                     status_code=400,
                     detail={
-                        "error": "Invalid GUID",
+                        "error": "Invalid identifier",
                         "message": str(e),
                     },
                 )
             except Exception as e:
-                self.logger.error("Failed to retrieve image", guid=guid, error=str(e))
+                self.logger.error("Failed to retrieve image", identifier=identifier, error=str(e))
                 raise HTTPException(
                     status_code=500,
                     detail={
@@ -541,22 +591,27 @@ class GraphWebServer:
                     },
                 )
 
-        @self.app.get("/proxy/{guid}/html")
+        @self.app.get("/proxy/{identifier}/html")
         async def get_image_html(
-            request: Request, guid: str, token_info: Optional[TokenInfo] = Depends(auth_dep)
+            request: Request, identifier: str, token_info: Optional[TokenInfo] = Depends(auth_dep)
         ):
             """
-            Retrieve a rendered image by its GUID and display it in an HTML page.
+            Retrieve a rendered image by its GUID or alias and display it in an HTML page.
             Useful for viewing images directly in a browser.
             Requires JWT authentication and group access (unless --no-auth is used).
+
+            Args:
+                identifier: Either a GUID (UUID format) or an alias (friendly name)
             """
             # Rate limiting (use default limit)
             client_id = self._get_client_id(request, token_info)
             try:
-                self.rate_limiter.check_limit(client_id=client_id, endpoint="/proxy/{guid}/html")
+                self.rate_limiter.check_limit(
+                    client_id=client_id, endpoint="/proxy/{identifier}/html"
+                )
             except RateLimitExceeded as e:
                 self.logger.warning(
-                    "Rate limit exceeded", client_id=client_id, endpoint="/proxy/{guid}/html"
+                    "Rate limit exceeded", client_id=client_id, endpoint="/proxy/{identifier}/html"
                 )
                 return JSONResponse(
                     status_code=429,
@@ -569,9 +624,23 @@ class GraphWebServer:
                 )
 
             group = token_info.group if token_info else "public"
-            self.logger.info("Get image HTML request", guid=guid, group=group)
+            self.logger.info("Get image HTML request", identifier=identifier, group=group)
 
             try:
+                # Resolve identifier (alias or GUID) to GUID
+                guid = self.storage.resolve_identifier(identifier, group=group)
+                if guid is None:
+                    self.logger.warning(
+                        "Identifier not found for HTML display", identifier=identifier
+                    )
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "error": "Image not found",
+                            "message": f"No image found for identifier: {identifier}",
+                        },
+                    )
+
                 result = self.storage.get_image(guid, group=group)
 
                 if result is None:
@@ -585,6 +654,9 @@ class GraphWebServer:
                     )
 
                 image_data, img_format = result
+
+                # Get alias if available
+                alias = self.storage.get_alias(guid)
 
                 # Encode image as base64 for embedding in HTML
                 base64_data = base64.b64encode(image_data).decode("utf-8")
@@ -666,6 +738,7 @@ class GraphWebServer:
                         <h1>gplot Rendered Image</h1>
                         <div class="info">
                             <strong>GUID:</strong> <code>{guid}</code><br>
+                            {f'<strong>Alias:</strong> <code>{alias}</code><br>' if alias else ''}
                             <strong>Format:</strong> {img_format.upper()}<br>
                             <strong>Size:</strong> {len(image_data):,} bytes
                         </div>
@@ -687,7 +760,7 @@ class GraphWebServer:
                 raise
             except PermissionDeniedError as e:
                 self.logger.warning(
-                    "Permission denied for HTML", guid=guid, error=str(e), group=group
+                    "Permission denied for HTML", identifier=identifier, error=str(e), group=group
                 )
                 raise HTTPException(
                     status_code=403,
@@ -697,16 +770,18 @@ class GraphWebServer:
                     },
                 )
             except ValueError as e:
-                self.logger.error("Invalid GUID for HTML", guid=guid, error=str(e))
+                self.logger.error(
+                    "Invalid identifier for HTML", identifier=identifier, error=str(e)
+                )
                 raise HTTPException(
                     status_code=400,
                     detail={
-                        "error": "Invalid GUID",
+                        "error": "Invalid identifier",
                         "message": str(e),
                     },
                 )
             except Exception as e:
-                self.logger.error("Failed to generate HTML", guid=guid, error=str(e))
+                self.logger.error("Failed to generate HTML", identifier=identifier, error=str(e))
                 raise HTTPException(
                     status_code=500,
                     detail={

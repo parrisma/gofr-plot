@@ -33,6 +33,7 @@ class TestAuthServiceDependencyInjection:
         # Verify new service was created
         assert isinstance(result, AuthService)
         assert result.secret_key == "test-secret"
+        assert result.token_store_path is not None
         assert result.token_store_path.name == "test_tokens.json"
 
     def test_injected_service_takes_precedence(self):

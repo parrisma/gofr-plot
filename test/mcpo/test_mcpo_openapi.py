@@ -18,7 +18,7 @@ import requests
 from app.logger import ConsoleLogger
 import logging
 
-MCPO_URL = "http://localhost:8002"
+from conftest import MCPO_URL
 
 
 def is_mcpo_available():
@@ -252,7 +252,7 @@ class TestMCPOProxyMode:
         # Now retrieve it
         response2 = requests.post(
             f"{MCPO_URL}/get_image",
-            json={"token": test_token, "guid": guid},
+            json={"token": test_token, "identifier": guid},
             headers={"Content-Type": "application/json"},
         )
 

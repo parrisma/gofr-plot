@@ -123,6 +123,17 @@ def set_auth_service(service: AuthService | None) -> None:
         )
 
 
+def set_storage(storage_instance) -> None:
+    """
+    Set the module-level storage instance (dependency injection for testing)
+
+    Args:
+        storage_instance: Storage instance implementing BaseStorage interface
+    """
+    global storage
+    storage = storage_instance
+
+
 @app.list_tools()
 async def handle_list_tools() -> list[Tool]:
     """List available tools for graph rendering."""
@@ -132,7 +143,12 @@ async def handle_list_tools() -> list[Tool]:
             description=(
                 "Health check endpoint that verifies the MCP server is running and responsive. "
                 "Returns the current server timestamp and service name. "
-                "This tool does NOT require authentication and can be called without a token parameter."
+                "\n\n**AUTHENTICATION**: NOT required - can be called without any parameters. "
+                "\n\n**USE CASES**: "
+                "• Verify server availability before making render requests "
+                "• Monitor server health in automated workflows "
+                "• Test network connectivity to the MCP server "
+                "\n\n**RESPONSE**: Returns server status, timestamp (ISO 8601 format), and service identifier."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
@@ -258,6 +274,10 @@ async def handle_list_tools() -> list[Tool]:
                         "description": "If true, save image to disk and return GUID instead of base64 (default: false)",
                         "default": False,
                     },
+                    "alias": {
+                        "type": "string",
+                        "description": "Optional friendly name for the image (only used when proxy=true). Must be 3-64 characters, alphanumeric with hyphens/underscores. Example: 'q4-sales-report'. Use get_image with this alias to retrieve later.",
+                    },
                     "color": {
                         "type": "string",
                         "description": "Line/marker color (e.g., 'red', '#FF5733', 'rgb(255,87,51)')",
@@ -321,7 +341,7 @@ async def handle_list_tools() -> list[Tool]:
                     },
                     "token": {
                         "type": "string",
-                        "description": "JWT authentication token (REQUIRED). The token's group claim determines ownership of created images and access rights. Example: 'eyJ0eXAiOiJKV1QiLCJhbGc...'",
+                        "description": "JWT authentication token (REQUIRED). The token's group claim determines ownership of created images and access rights. Obtain tokens using: (1) token_manager.py CLI tool, (2) POST /auth/create_token web endpoint, or (3) create_token MCP tool if available. Format: 'eyJ0eXAiOiJKV1QiLCJhbGc...' (full JWT string)",
                     },
                 },
                 "required": ["title", "token"],
@@ -330,52 +350,465 @@ async def handle_list_tools() -> list[Tool]:
         Tool(
             name="get_image",
             description=(
-                "Retrieve a previously stored graph image using its GUID identifier. "
+                "Retrieve a previously stored graph image using its GUID or alias. "
                 "\n\n**AUTHENTICATION**: Requires a valid JWT 'token' parameter. "
                 "The token's group must match the group that created the image (group-based access control). "
-                "\n\n**WORKFLOW**: Use this after calling render_graph with proxy=true, which returns a GUID. "
-                "The GUID can be stored and used later to retrieve the image. "
-                "\n\n**OUTPUT**: Returns the image as base64-encoded data with its original format (png, jpg, svg, pdf). "
-                "\n\n**ERROR HANDLING**: If the image doesn't exist or belongs to a different group, an error message is returned."
+                "\n\n**IDENTIFIERS**: You can use either: "
+                "• GUID: Full UUID like '550e8400-e29b-41d4-a716-446655440000' "
+                "• Alias: Friendly name like 'q4-sales-report' (if set during render_graph) "
+                "\n\n**WORKFLOW EXAMPLE**: "
+                "1. Call render_graph with proxy=true, alias='monthly-chart' → receives GUID "
+                "2. Later, call get_image with identifier='monthly-chart' → receives image "
+                "\n\n**OUTPUT**: Returns the image as base64-encoded data with metadata (format, size). "
+                "\n\n**ERROR CASES**: "
+                "• Not Found: Identifier doesn't exist or was deleted "
+                "• Permission Denied: Token's group doesn't match image's group "
+                "• Invalid Input: Neither valid GUID nor registered alias"
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "guid": {
+                    "identifier": {
                         "type": "string",
-                        "description": "The GUID identifier of the stored image (returned by render_graph when proxy=true). Example: '550e8400-e29b-41d4-a716-446655440000'",
+                        "description": "The image identifier - either a GUID (UUID format like '550e8400-e29b-41d4-a716-446655440000') or an alias (friendly name like 'q4-report'). Aliases must be 3-64 characters, alphanumeric with hyphens/underscores.",
                     },
                     "token": {
                         "type": "string",
-                        "description": "JWT authentication token (REQUIRED). Must match the group that created the image. Example: 'eyJ0eXAiOiJKV1QiLCJhbGc...'",
+                        "description": "JWT authentication token (REQUIRED). Must match the group that created the image. Obtain tokens using: (1) token_manager.py CLI tool, (2) POST /auth/create_token web endpoint, or (3) create_token MCP tool if available. Format: 'eyJ0eXAiOiJKV1QiLCJhbGc...' (full JWT string)",
                     },
                 },
-                "required": ["guid", "token"],
+                "required": ["identifier", "token"],
             },
         ),
         Tool(
             name="list_themes",
             description=(
-                "Discover all available visual themes with descriptions. "
-                "\n\n**AUTHENTICATION**: Does NOT require a token parameter. "
-                "\n\n**PURPOSE**: Use this tool to see which theme names can be passed to the 'theme' parameter in render_graph. "
-                "Each theme includes color palettes, background colors, and grid styles optimized for different use cases. "
-                "\n\n**OUTPUT**: Returns a formatted list of theme names with descriptions explaining their visual style and intended use."
+                "Discover all available visual themes with detailed descriptions. "
+                "\n\n**AUTHENTICATION**: NOT required - can be called without any parameters. "
+                "\n\n**PURPOSE**: Use before calling render_graph to choose appropriate theme. "
+                "Each theme defines: (1) color palettes for multi-dataset charts, (2) background colors, (3) grid styles, (4) text colors. "
+                "\n\n**WHEN TO USE**: "
+                "• Before first render to see available options "
+                "• When user requests specific visual style (light/dark/business) "
+                "• To understand theme-specific color defaults "
+                "\n\n**OUTPUT**: Returns theme names ('light', 'dark', 'bizlight', 'bizdark') with descriptions of visual characteristics and recommended use cases."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
         Tool(
             name="list_handlers",
             description=(
-                "Discover all available graph types (chart types) with descriptions. "
-                "\n\n**AUTHENTICATION**: Does NOT require a token parameter. "
-                "\n\n**PURPOSE**: Use this tool to see which chart type names can be passed to the 'type' parameter in render_graph. "
-                "Each handler supports different visualization styles (line plots, scatter plots, bar charts) with specific capabilities. "
-                "\n\n**OUTPUT**: Returns a formatted list of type names with descriptions explaining what each chart type renders and its multi-dataset support."
+                "Discover all available chart types with detailed capability descriptions. "
+                "\n\n**AUTHENTICATION**: NOT required - can be called without any parameters. "
+                "\n\n**PURPOSE**: Use before calling render_graph to choose the right chart type for your data. "
+                "\n\n**CHART TYPES OVERVIEW**: "
+                "• 'line': Continuous data, trends over time, connected points (supports multi-dataset) "
+                "• 'scatter': Individual data points, correlation analysis, no connecting lines (supports multi-dataset) "
+                "• 'bar': Categorical comparisons, discrete values, grouped bars (supports multi-dataset) "
+                "\n\n**WHEN TO USE**: "
+                "• To understand which chart type fits your data visualization needs "
+                "• To verify multi-dataset support for your chosen chart type "
+                "• To discover chart-specific styling options "
+                "\n\n**OUTPUT**: Returns type names with descriptions of rendering behavior, data requirements, and multi-dataset capabilities."
             ),
             inputSchema={"type": "object", "properties": {}, "required": []},
         ),
+        Tool(
+            name="list_images",
+            description=(
+                "Discover all stored images accessible to your token's group. "
+                "\n\n**AUTHENTICATION**: Requires a valid JWT 'token' parameter. "
+                "Only images belonging to your token's group will be listed. "
+                "\n\n**PURPOSE**: Use to find previously stored images for retrieval with get_image. "
+                "\n\n**WORKFLOW EXAMPLE**: "
+                "1. Call list_images → see all stored GUIDs and aliases in your group "
+                "2. Call get_image with a GUID or alias → retrieve the image "
+                "\n\n**OUTPUT**: Returns a list of stored images with: "
+                "• GUID: Unique identifier for each image "
+                "• Alias: Human-friendly name (if registered during render_graph with proxy=true) "
+                "• Count: Total number of images in your group "
+                "\n\n**USE CASES**: "
+                "• Find previously rendered charts for reuse "
+                "• Verify an image was stored correctly "
+                "• Audit stored images in your group"
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "token": {
+                        "type": "string",
+                        "description": "JWT authentication token (REQUIRED). Only images from your token's group will be listed. Obtain tokens using: (1) token_manager.py CLI tool, (2) POST /auth/create_token web endpoint, or (3) create_token MCP tool if available.",
+                    },
+                },
+                "required": ["token"],
+            },
+        ),
     ]
+
+
+# ============================================================================
+# Tool Handler Functions
+# ============================================================================
+# These functions implement individual tool logic, extracted from the
+# monolithic handle_call_tool for better maintainability and testability.
+
+
+def _handle_ping(client_id: str) -> list[TextContent | ImageContent | EmbeddedResource]:
+    """Handle ping tool - health check endpoint."""
+    logger.info("Ping tool called")
+
+    # Rate limiting (lenient for health checks)
+    try:
+        rate_limiter.check_limit(client_id=client_id, endpoint="ping")
+    except RateLimitExceeded as e:
+        logger.warning("Rate limit exceeded", client_id=client_id, endpoint="ping")
+        security_auditor.log_rate_limit(client_id=client_id, endpoint="ping", limit=1000, window=60)
+        return format_error(
+            "Rate Limit Exceeded",
+            "Too many ping requests in the current time window",
+            [
+                f"Action Required: Wait {int(e.retry_after)} seconds before trying again",
+                "Limit: 1000 requests per 60-second window",
+                "Purpose: Ping endpoint is rate-limited to prevent abuse while allowing health monitoring",
+            ],
+            {"retry_after": int(e.retry_after), "limit": "1000 per 60s", "endpoint": "ping"},
+        )
+
+    current_time = datetime.now().isoformat()
+    logger.debug("Ping response", timestamp=current_time)
+    return [
+        TextContent(
+            type="text", text=f"Server is running\nTimestamp: {current_time}\nService: gplot"
+        )
+    ]
+
+
+def _handle_get_image(
+    arguments: dict[str, Any], client_id: str
+) -> list[TextContent | ImageContent | EmbeddedResource]:
+    """Handle get_image tool - retrieve stored chart image by GUID."""
+    logger.info("Get image tool called")
+
+    # Rate limiting (use default limit)
+    try:
+        rate_limiter.check_limit(client_id=client_id, endpoint="get_image")
+    except RateLimitExceeded as e:
+        logger.warning("Rate limit exceeded", client_id=client_id, endpoint="get_image")
+        security_auditor.log_rate_limit(
+            client_id=client_id, endpoint="get_image", limit=100, window=60
+        )
+        return format_error(
+            "Rate Limit Exceeded",
+            "Too many get_image requests in the current time window",
+            [
+                f"Action Required: Wait {int(e.retry_after)} seconds before trying again",
+                "Limit: 100 requests per 60-second window (default tier)",
+                "Purpose: Rate limiting prevents storage system overload",
+            ],
+            {"retry_after": int(e.retry_after), "limit": "100 per 60s", "endpoint": "get_image"},
+        )
+
+    # Validate required arguments
+    if "identifier" not in arguments:
+        logger.warning("Missing required argument: identifier")
+        return format_error(
+            "Missing Parameter",
+            "Required parameter 'identifier' was not provided",
+            [
+                "Action Required: Include the 'identifier' parameter with the image GUID or alias",
+                "How to Obtain: GUIDs/aliases are returned by render_graph when proxy=true is set",
+                "Format: identifier='550e8400-...' (GUID) or identifier='my-chart' (alias)",
+                "Note: Aliases must be 3-64 chars, alphanumeric with hyphens/underscores",
+            ],
+            {"missing_parameter": "identifier", "parameter_type": "string"},
+        )
+
+    if "token" not in arguments:
+        logger.warning("Missing required argument: token")
+        return AUTH_REQUIRED_ERROR
+
+    identifier = arguments["identifier"]
+    token = arguments["token"]
+
+    # Verify JWT token
+    try:
+        if auth_service is None:
+            group = "public"
+            logger.debug("No-auth mode: using public group", group=group)
+        else:
+            token_info = auth_service.verify_token(token)
+            group = token_info.group
+            logger.debug("Token verified", group=group)
+    except Exception as e:
+        logger.error("Token validation failed", error=str(e))
+        security_auditor.log_auth_failure(client_id=client_id, reason=str(e), endpoint="get_image")
+        return AUTH_INVALID_ERROR(str(e))
+
+    try:
+        # Resolve identifier (alias or GUID) to GUID
+        guid = storage.resolve_identifier(identifier, group=group)
+        if guid is None:
+            logger.warning("Identifier not found", identifier=identifier, group=group)
+            return format_error(
+                "Not Found",
+                f"No image found with identifier: {identifier}",
+                [
+                    "Verify the GUID or alias is correct",
+                    "The image may have been deleted",
+                    "Aliases are group-specific - ensure your token matches the image's group",
+                ],
+                {"identifier": identifier, "group": group},
+            )
+
+        # Retrieve image from storage with group access control
+        image_result = storage.get_image(guid, group=group)
+
+        if image_result is None:
+            logger.warning("Image not found", guid=guid)
+            return format_error(
+                "Not Found",
+                f"No image found with GUID: {guid}",
+                [
+                    "Verify the GUID is correct",
+                    "The image may have been deleted",
+                    "Check that you have access to the correct storage group",
+                ],
+                {"guid": guid, "group": group},
+            )
+
+        image_data, img_format = image_result
+        base64_image = base64.b64encode(image_data).decode("utf-8")
+
+        logger.info(
+            "Image retrieved successfully", guid=guid, format=img_format, size=len(image_data)
+        )
+
+        # Include alias in response if available
+        alias = storage.get_alias(guid)
+        metadata = {"format": img_format, "size_bytes": len(image_data), "guid": guid}
+        if alias:
+            metadata["alias"] = alias
+
+        return format_success_image(
+            base64_image,
+            f"image/{img_format}",
+            f"Retrieved image {guid}" + (f" (alias: {alias})" if alias else ""),
+            metadata,
+        )
+
+    except PermissionDeniedError as e:
+        logger.warning("Permission denied", identifier=identifier, error=str(e), group=group)
+        return PERMISSION_DENIED_ERROR(identifier, group)
+
+    except ValueError as e:
+        logger.error("Invalid identifier", identifier=identifier, error=str(e))
+        return format_error(
+            "Invalid Input",
+            f"Invalid identifier: {identifier}",
+            [
+                "Ensure the identifier is a valid GUID or registered alias",
+                "Example GUID: '550e8400-e29b-41d4-a716-446655440000'",
+                "Aliases are returned by render_graph when proxy=true with alias parameter",
+            ],
+            {"provided": identifier},
+        )
+
+    except Exception as e:
+        logger.error("Failed to retrieve image", identifier=identifier, error=str(e))
+        return format_error(
+            "Retrieval Failed",
+            f"Unexpected error retrieving image: {str(e)}",
+            [
+                "Check server logs for details",
+                "Verify the storage system is accessible",
+                "Try the operation again",
+            ],
+        )
+
+
+def _handle_list_themes(client_id: str) -> list[TextContent | ImageContent | EmbeddedResource]:
+    """Handle list_themes tool - discover available visual themes."""
+    logger.info("List themes tool called")
+
+    # Rate limiting (use default limit)
+    try:
+        rate_limiter.check_limit(client_id=client_id, endpoint="list_themes")
+    except RateLimitExceeded as e:
+        logger.warning("Rate limit exceeded", client_id=client_id, endpoint="list_themes")
+        security_auditor.log_rate_limit(
+            client_id=client_id, endpoint="list_themes", limit=100, window=60
+        )
+        return format_error(
+            "Rate Limit Exceeded",
+            "Too many list_themes requests in the current time window",
+            [
+                f"Action Required: Wait {int(e.retry_after)} seconds before trying again",
+                "Limit: 100 requests per 60-second window (default tier)",
+                "Note: Theme list rarely changes, consider caching results locally",
+            ],
+            {"retry_after": int(e.retry_after), "limit": "100 per 60s", "endpoint": "list_themes"},
+        )
+
+    try:
+        themes = list_themes_with_descriptions()
+        logger.debug("Themes listed", count=len(themes))
+        return format_list("Available Themes", themes)
+    except Exception as e:
+        logger.error("Failed to list themes", error=str(e))
+        return format_error(
+            "Discovery Failed",
+            f"Unable to list themes: {str(e)}",
+            [
+                "Action Required: Retry the operation",
+                "If error persists: Check server logs for system-level errors",
+                "Fallback: Use default theme 'light' if theme discovery fails",
+            ],
+            {"operation": "list_themes", "error_type": type(e).__name__},
+        )
+
+
+def _handle_list_handlers(client_id: str) -> list[TextContent | ImageContent | EmbeddedResource]:
+    """Handle list_handlers tool - discover available chart types."""
+    logger.info("List handlers tool called")
+
+    # Rate limiting (use default limit)
+    try:
+        rate_limiter.check_limit(client_id=client_id, endpoint="list_handlers")
+    except RateLimitExceeded as e:
+        logger.warning("Rate limit exceeded", client_id=client_id, endpoint="list_handlers")
+        security_auditor.log_rate_limit(
+            client_id=client_id, endpoint="list_handlers", limit=100, window=60
+        )
+        return format_error(
+            "Rate Limit Exceeded",
+            "Too many list_handlers requests in the current time window",
+            [
+                f"Action Required: Wait {int(e.retry_after)} seconds before trying again",
+                "Limit: 100 requests per 60-second window (default tier)",
+                "Note: Handler list rarely changes, consider caching results locally",
+            ],
+            {
+                "retry_after": int(e.retry_after),
+                "limit": "100 per 60s",
+                "endpoint": "list_handlers",
+            },
+        )
+
+    try:
+        handlers = list_handlers_with_descriptions()
+        logger.debug("Handlers listed", count=len(handlers))
+        return format_list("Available Graph Types", handlers)
+    except Exception as e:
+        logger.error("Failed to list handlers", error=str(e))
+        return format_error(
+            "Discovery Failed",
+            f"Unable to list graph types: {str(e)}",
+            [
+                "Action Required: Retry the operation",
+                "If error persists: Check server logs for system-level errors",
+                "Fallback: Use default type 'line' if handler discovery fails",
+                "Known Types: line, scatter, bar",
+            ],
+            {"operation": "list_handlers", "error_type": type(e).__name__},
+        )
+
+
+def _handle_list_images(
+    arguments: dict[str, Any], client_id: str
+) -> list[TextContent | ImageContent | EmbeddedResource]:
+    """Handle list_images tool - discover stored images in user's group."""
+    logger.info("List images tool called")
+
+    # Rate limiting (use default limit)
+    try:
+        rate_limiter.check_limit(client_id=client_id, endpoint="list_images")
+    except RateLimitExceeded as e:
+        logger.warning("Rate limit exceeded", client_id=client_id, endpoint="list_images")
+        security_auditor.log_rate_limit(
+            client_id=client_id, endpoint="list_images", limit=100, window=60
+        )
+        return format_error(
+            "Rate Limit Exceeded",
+            "Too many list_images requests in the current time window",
+            [
+                f"Action Required: Wait {int(e.retry_after)} seconds before trying again",
+                "Limit: 100 requests per 60-second window (default tier)",
+            ],
+            {
+                "retry_after": int(e.retry_after),
+                "limit": "100 per 60s",
+                "endpoint": "list_images",
+            },
+        )
+
+    # Validate token
+    token = arguments.get("token")
+    if not token:
+        logger.warning("List images attempted without token")
+        return AUTH_REQUIRED_ERROR
+
+    if not auth_service:
+        logger.error("Auth service not configured")
+        return format_error(
+            "Configuration Error",
+            "Authentication service not available",
+            ["Server configuration issue - contact administrator"],
+        )
+
+    # Verify token and get group
+    try:
+        token_info = auth_service.verify_token(token)
+        group = token_info.group
+        logger.debug("Token verified for list_images", group=group)
+    except Exception as e:
+        logger.warning("Invalid token for list_images", error=str(e))
+        security_auditor.log_auth_failure(
+            client_id=client_id, reason=str(e), endpoint="list_images"
+        )
+        return AUTH_INVALID_ERROR(str(e))
+
+    logger.info("List images request", group=group)
+
+    try:
+        # Get list of GUIDs in the group
+        guids = storage.list_images(group=group)
+
+        # Build response with alias info
+        image_list = []
+        for guid in guids:
+            alias = storage.get_alias(guid)
+            if alias:
+                image_list.append(f"• {guid} (alias: {alias})")
+            else:
+                image_list.append(f"• {guid}")
+
+        if not image_list:
+            return [
+                TextContent(
+                    type="text",
+                    text=f"No images stored in group '{group}'.\n\nTo store images, use render_graph with proxy=true.",
+                )
+            ]
+
+        result_text = f"Stored Images in group '{group}' ({len(guids)} total):\n\n" + "\n".join(
+            image_list
+        )
+        result_text += "\n\nUse get_image with a GUID or alias to retrieve an image."
+
+        logger.debug("Listed images", group=group, count=len(guids))
+        return [TextContent(type="text", text=result_text)]
+
+    except Exception as e:
+        logger.error("Failed to list images", error=str(e), group=group)
+        return format_error(
+            "Discovery Failed",
+            f"Unable to list images: {str(e)}",
+            [
+                "Action Required: Retry the operation",
+                "If error persists: Check server logs for system-level errors",
+            ],
+            {"operation": "list_images", "error_type": type(e).__name__, "group": group},
+        )
 
 
 @app.call_tool()
@@ -383,10 +816,10 @@ async def handle_call_tool(
     name: str, arguments: dict[str, Any]
 ) -> list[TextContent | ImageContent | EmbeddedResource]:
     """
-    Handle tool execution requests with comprehensive error handling.
+    Handle tool execution requests by dispatching to appropriate handler functions.
 
-    This function ensures the MCP server never crashes by catching all exceptions
-    and returning meaningful error messages to the client.
+    This function routes tool requests to specialized handlers for better maintainability.
+    Each handler is responsible for its own validation, rate limiting, and error handling.
     """
 
     # Extract client identifier for rate limiting (use token if available, otherwise 'anonymous')
@@ -403,214 +836,21 @@ async def handle_call_tool(
         timestamp=datetime.now().isoformat(),
     )
 
+    # Dispatch to appropriate handler
     if name == "ping":
-        logger.info("Ping tool called")
-
-        # Rate limiting (lenient for health checks)
-        try:
-            rate_limiter.check_limit(client_id=client_id, endpoint="ping")
-        except RateLimitExceeded as e:
-            logger.warning("Rate limit exceeded", client_id=client_id, endpoint="ping")
-            security_auditor.log_rate_limit(
-                client_id=client_id, endpoint="ping", limit=1000, window=60
-            )
-            return format_error(
-                "Rate Limit Exceeded",
-                f"Too many ping requests: {str(e)}",
-                [
-                    f"Wait {int(e.retry_after)} seconds before trying again",
-                    "Ping allows 1000 requests per 60 seconds",
-                ],
-                {"retry_after": int(e.retry_after)},
-            )
-
-        current_time = datetime.now().isoformat()
-        logger.debug("Ping response", timestamp=current_time)
-        return [
-            TextContent(
-                type="text", text=f"Server is running\nTimestamp: {current_time}\nService: gplot"
-            )
-        ]
+        return _handle_ping(client_id)
 
     if name == "get_image":
-        logger.info("Get image tool called")
-
-        # Rate limiting (use default limit)
-        try:
-            rate_limiter.check_limit(client_id=client_id, endpoint="get_image")
-        except RateLimitExceeded as e:
-            logger.warning("Rate limit exceeded", client_id=client_id, endpoint="get_image")
-            security_auditor.log_rate_limit(
-                client_id=client_id, endpoint="get_image", limit=100, window=60
-            )
-            return format_error(
-                "Rate Limit Exceeded",
-                f"Too many get_image requests: {str(e)}",
-                [
-                    f"Wait {int(e.retry_after)} seconds before trying again",
-                    "Default limit: 100 requests per 60 seconds",
-                ],
-                {"retry_after": int(e.retry_after)},
-            )
-
-        # Validate required arguments
-        if "guid" not in arguments:
-            logger.warning("Missing required argument: guid")
-            return format_error(
-                "Missing Parameter",
-                "The required 'guid' parameter was not provided",
-                [
-                    "Include the GUID of the image you want to retrieve",
-                    "GUIDs are returned by render_graph when proxy=true",
-                    "Example: guid='550e8400-e29b-41d4-a716-446655440000'",
-                ],
-            )
-
-        if "token" not in arguments:
-            logger.warning("Missing required argument: token")
-            return AUTH_REQUIRED_ERROR
-
-        guid = arguments["guid"]
-        token = arguments["token"]
-
-        # Verify JWT token
-        try:
-            if auth_service is None:
-                # No-auth mode: use public group
-                group = "public"
-                logger.debug("No-auth mode: using public group", group=group)
-            else:
-                token_info = auth_service.verify_token(token)
-                group = token_info.group
-                logger.debug("Token verified", group=group)
-        except Exception as e:
-            logger.error("Token validation failed", error=str(e))
-            security_auditor.log_auth_failure(
-                client_id=client_id, reason=str(e), endpoint="get_image"
-            )
-            return AUTH_INVALID_ERROR(str(e))
-
-        try:
-            # Retrieve image from storage with group access control
-            image_result = storage.get_image(guid, group=group)
-
-            if image_result is None:
-                logger.warning("Image not found", guid=guid)
-                return format_error(
-                    "Not Found",
-                    f"No image found with GUID: {guid}",
-                    [
-                        "Verify the GUID is correct",
-                        "The image may have been deleted",
-                        "Check that you have access to the correct storage group",
-                    ],
-                    {"guid": guid, "group": group},
-                )
-
-            image_data, img_format = image_result
-
-            # Encode to base64
-            base64_image = base64.b64encode(image_data).decode("utf-8")
-
-            logger.info(
-                "Image retrieved successfully", guid=guid, format=img_format, size=len(image_data)
-            )
-
-            return format_success_image(
-                base64_image,
-                f"image/{img_format}",
-                f"Retrieved image {guid}",
-                {"format": img_format, "size_bytes": len(image_data)},
-            )
-
-        except PermissionDeniedError as e:
-            logger.warning("Permission denied", guid=guid, error=str(e), group=group)
-            return PERMISSION_DENIED_ERROR(guid, group)
-
-        except ValueError as e:
-            logger.error("Invalid GUID", guid=guid, error=str(e))
-            return format_error(
-                "Invalid Input",
-                f"Invalid GUID format: {guid}",
-                [
-                    "Ensure the GUID is a valid UUID format",
-                    "Example: '550e8400-e29b-41d4-a716-446655440000'",
-                    "GUIDs are returned by render_graph when proxy=true",
-                ],
-                {"provided": guid},
-            )
-
-        except Exception as e:
-            logger.error("Failed to retrieve image", guid=guid, error=str(e))
-            return format_error(
-                "Retrieval Failed",
-                f"Unexpected error retrieving image: {str(e)}",
-                [
-                    "Check server logs for details",
-                    "Verify the storage system is accessible",
-                    "Try the operation again",
-                ],
-            )
+        return _handle_get_image(arguments, client_id)
 
     if name == "list_themes":
-        logger.info("List themes tool called")
-
-        # Rate limiting (use default limit)
-        try:
-            rate_limiter.check_limit(client_id=client_id, endpoint="list_themes")
-        except RateLimitExceeded as e:
-            logger.warning("Rate limit exceeded", client_id=client_id, endpoint="list_themes")
-            security_auditor.log_rate_limit(
-                client_id=client_id, endpoint="list_themes", limit=100, window=60
-            )
-            return format_error(
-                "Rate Limit Exceeded",
-                f"Too many list_themes requests: {str(e)}",
-                [f"Wait {int(e.retry_after)} seconds before trying again"],
-                {"retry_after": int(e.retry_after)},
-            )
-
-        try:
-            themes = list_themes_with_descriptions()
-            logger.debug("Themes listed", count=len(themes))
-            return format_list("Available Themes", themes)
-        except Exception as e:
-            logger.error("Failed to list themes", error=str(e))
-            return format_error(
-                "Discovery Failed",
-                f"Unable to list themes: {str(e)}",
-                ["Check server logs for details", "Try the operation again"],
-            )
+        return _handle_list_themes(client_id)
 
     if name == "list_handlers":
-        logger.info("List handlers tool called")
+        return _handle_list_handlers(client_id)
 
-        # Rate limiting (use default limit)
-        try:
-            rate_limiter.check_limit(client_id=client_id, endpoint="list_handlers")
-        except RateLimitExceeded as e:
-            logger.warning("Rate limit exceeded", client_id=client_id, endpoint="list_handlers")
-            security_auditor.log_rate_limit(
-                client_id=client_id, endpoint="list_handlers", limit=100, window=60
-            )
-            return format_error(
-                "Rate Limit Exceeded",
-                f"Too many list_handlers requests: {str(e)}",
-                [f"Wait {int(e.retry_after)} seconds before trying again"],
-                {"retry_after": int(e.retry_after)},
-            )
-
-        try:
-            handlers = list_handlers_with_descriptions()
-            logger.debug("Handlers listed", count=len(handlers))
-            return format_list("Available Graph Types", handlers)
-        except Exception as e:
-            logger.error("Failed to list handlers", error=str(e))
-            return format_error(
-                "Discovery Failed",
-                f"Unable to list graph types: {str(e)}",
-                ["Check server logs for details", "Try the operation again"],
-            )
+    if name == "list_images":
+        return _handle_list_images(arguments, client_id)
 
     if name != "render_graph":
         logger.warning("Unknown tool requested", tool_name=name)
@@ -623,10 +863,11 @@ async def handle_call_tool(
             ],
             {
                 "requested": name,
-                "available": "ping, render_graph, get_image, list_themes, list_handlers",
+                "available": "ping, render_graph, get_image, list_images, list_themes, list_handlers",
             },
         )
 
+    # Handle render_graph tool
     logger.info("Render tool called")
     logger.debug(
         "Render request received",
@@ -653,13 +894,14 @@ async def handle_call_tool(
         )
         return format_error(
             "Rate Limit Exceeded",
-            f"Too many render_graph requests: {str(e)}",
+            "Too many render_graph requests in the current time window",
             [
-                f"Wait {int(e.retry_after)} seconds before trying again",
-                "Render operations are limited to 10 requests per 60 seconds",
-                "This limit prevents server overload from expensive rendering operations",
+                f"Action Required: Wait {int(e.retry_after)} seconds before trying again",
+                "Limit: 10 requests per 60-second window (strict tier)",
+                "Reason: Rendering is computationally expensive and strictly rate-limited",
+                "Tip: Use proxy=true to save images for later retrieval without re-rendering",
             ],
-            {"retry_after": int(e.retry_after), "limit": "10 per 60 seconds"},
+            {"retry_after": int(e.retry_after), "limit": "10 per 60s", "endpoint": "render_graph"},
         )
 
     try:
@@ -725,6 +967,7 @@ async def handle_call_tool(
         # Create GraphParams from arguments - pass all optional fields
         try:
             is_proxy = arguments.get("proxy", False)
+            alias = arguments.get("alias")  # Optional alias for proxy mode
             graph_data = GraphParams(
                 title=arguments["title"],
                 x=arguments.get("x"),  # Optional now
@@ -891,6 +1134,16 @@ async def handle_call_tool(
                 )
 
             logger.debug("Storage verification PASSED", guid=guid, size=len(verification[0]))
+
+            # Register alias if provided
+            if alias:
+                try:
+                    storage.register_alias(alias, guid, group)
+                    logger.info("Alias registered", alias=alias, guid=guid, group=group)
+                except ValueError as e:
+                    logger.warning("Failed to register alias", alias=alias, error=str(e))
+                    # Continue without alias - image was saved successfully
+
             logger.info(
                 "Returning GUID response (proxy mode)",
                 title=graph_data.title,
@@ -899,8 +1152,10 @@ async def handle_call_tool(
             )
 
             # Build response based on proxy_url_mode
-            response_text = f"Image saved with GUID: {guid}\n\n"
-            response_text += f"Chart: {graph_data.type} - '{graph_data.title}'\n"
+            response_text = f"Image saved with GUID: {guid}\n"
+            if alias and storage.get_alias(guid) == alias:
+                response_text += f"Alias: {alias}\n"
+            response_text += f"\nChart: {graph_data.type} - '{graph_data.title}'\n"
             response_text += f"Format: {graph_data.format}\n\n"
 
             if proxy_url_mode == "url":
@@ -911,10 +1166,20 @@ async def handle_call_tool(
                 web_base = web_url_override or os.getenv("GPLOT_WEB_URL", f"http://{hostname}:8000")
                 download_url = f"{web_base}/proxy/{guid}"
                 response_text += f"Download URL: {download_url}\n"
-                response_text += f"(Or use get_image tool with guid='{guid}')"
+                if alias and storage.get_alias(guid) == alias:
+                    response_text += (
+                        f"(Or use get_image tool with identifier='{alias}' or identifier='{guid}')"
+                    )
+                else:
+                    response_text += f"(Or use get_image tool with identifier='{guid}')"
             else:
                 # GUID mode: only provide GUID
-                response_text += f"Use get_image tool with guid='{guid}' to retrieve the image."
+                if alias and storage.get_alias(guid) == alias:
+                    response_text += f"Use get_image tool with identifier='{alias}' or identifier='{guid}' to retrieve."
+                else:
+                    response_text += (
+                        f"Use get_image tool with identifier='{guid}' to retrieve the image."
+                    )
 
             return [
                 TextContent(

@@ -13,6 +13,7 @@ from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
 import logging
 import os
+from conftest import MCP_URL, WEB_URL
 
 
 # Test configuration
@@ -26,8 +27,6 @@ SHARED_TOKEN_STORE = os.environ.get(
     "GPLOT_TOKEN_STORE",
     "/tmp/gplot_test_tokens.json",
 )
-MCP_URL = "http://localhost:8001/mcp/"
-WEB_URL = "http://localhost:8000"
 
 # Note: test_token and invalid_token fixtures are now defined in conftest.py
 
@@ -220,7 +219,7 @@ class TestMCPAuthentication:
                 result = await session.call_tool(
                     "get_image",
                     arguments={
-                        "guid": guid,
+                        "identifier": guid,
                         "token": test_token,
                     },
                 )
@@ -275,7 +274,7 @@ class TestMCPAuthentication:
                 result = await session.call_tool(
                     "get_image",
                     arguments={
-                        "guid": guid,
+                        "identifier": guid,
                         "token": other_token,
                     },
                 )

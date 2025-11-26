@@ -4,6 +4,7 @@ import pytest
 import os
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+from conftest import MCP_URL
 
 # Note: test_jwt_token and logger fixtures are now defined in conftest.py
 
@@ -48,7 +49,7 @@ async def test_render_with_axis_limits(test_jwt_token, logger):
 @pytest.mark.asyncio
 async def test_render_with_major_ticks(test_jwt_token, logger):
     """Test rendering with custom major ticks via MCP"""
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     async with streamablehttp_client(http_url) as (read, write, _):
         async with ClientSession(read, write) as session:
@@ -82,7 +83,7 @@ async def test_render_with_major_ticks(test_jwt_token, logger):
 @pytest.mark.asyncio
 async def test_render_with_minor_ticks(test_jwt_token, logger):
     """Test rendering with major and minor ticks via MCP"""
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     async with streamablehttp_client(http_url) as (read, write, _):
         async with ClientSession(read, write) as session:
@@ -118,7 +119,7 @@ async def test_render_with_minor_ticks(test_jwt_token, logger):
 @pytest.mark.asyncio
 async def test_render_with_all_axis_controls(test_jwt_token, logger):
     """Test rendering with all axis control parameters via MCP"""
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     async with streamablehttp_client(http_url) as (read, write, _):
         async with ClientSession(read, write) as session:
@@ -161,7 +162,7 @@ async def test_render_with_all_axis_controls(test_jwt_token, logger):
 @pytest.mark.asyncio
 async def test_render_with_partial_limits(test_jwt_token, logger):
     """Test rendering with only some axis limits set via MCP"""
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     async with streamablehttp_client(http_url) as (read, write, _):
         async with ClientSession(read, write) as session:
@@ -194,7 +195,7 @@ async def test_render_with_partial_limits(test_jwt_token, logger):
 @pytest.mark.asyncio
 async def test_render_without_axis_controls(test_jwt_token, logger):
     """Test that rendering without axis controls still works (backward compatibility)"""
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     async with streamablehttp_client(http_url) as (read, write, _):
         async with ClientSession(read, write) as session:

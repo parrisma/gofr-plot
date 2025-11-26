@@ -35,7 +35,9 @@ class AuthService:
 
         Args:
             secret_key: Secret key for JWT signing (defaults to env var or generates one)
-            token_store_path: Path to store token-group mappings. If None, uses configured default from app.config
+            token_store_path: Path to store token-group mappings.
+                             If None, uses configured default from app.config.
+                             If ":memory:", uses in-memory storage without file persistence.
         """
         self.logger = ConsoleLogger(name="auth", level=logging.INFO)
 
@@ -51,14 +53,25 @@ class AuthService:
         # Setup token store
         if token_store_path is None:
             token_store_path = get_default_token_store_path()
-        self.token_store_path = Path(token_store_path)
-        self._load_token_store()
 
-        self.logger.info(
-            "AuthService initialized",
-            token_store=str(self.token_store_path),
-            secret_fingerprint=self._secret_fingerprint(),
-        )
+        # Check for in-memory mode
+        self._use_memory_store = token_store_path == ":memory:"
+
+        if self._use_memory_store:
+            self.token_store_path = None
+            self.token_store = {}
+            self.logger.info(
+                "AuthService initialized with in-memory token store",
+                secret_fingerprint=self._secret_fingerprint(),
+            )
+        else:
+            self.token_store_path = Path(token_store_path)
+            self._load_token_store()
+            self.logger.info(
+                "AuthService initialized",
+                token_store=str(self.token_store_path),
+                secret_fingerprint=self._secret_fingerprint(),
+            )
 
     def _secret_fingerprint(self) -> str:
         """Return a stable fingerprint for the current secret without exposing it."""
@@ -70,7 +83,17 @@ class AuthService:
         return self._secret_fingerprint()
 
     def _load_token_store(self) -> None:
-        """Load token-group mappings from disk"""
+        """Load token-group mappings from disk (no-op for in-memory mode)"""
+        # Skip file I/O for in-memory mode
+        if self._use_memory_store:
+            self.logger.debug("In-memory mode: skipping token store load")
+            return
+
+        # Type assertion: token_store_path is not None when not in memory mode
+        assert (
+            self.token_store_path is not None
+        ), "token_store_path must be set when not using memory mode"
+
         # ALWAYS log to verify this is being called
         self.logger.info(
             f"_load_token_store called, path={self.token_store_path}, exists={self.token_store_path.exists()}"
@@ -95,7 +118,19 @@ class AuthService:
             self.logger.debug("Token store initialized as empty", path=str(self.token_store_path))
 
     def _save_token_store(self) -> None:
-        """Save token-group mappings to disk"""
+        """Save token-group mappings to disk (no-op for in-memory mode)"""
+        # Skip file I/O for in-memory mode
+        if self._use_memory_store:
+            self.logger.debug(
+                "In-memory mode: skipping token store save", tokens_count=len(self.token_store)
+            )
+            return
+
+        # Type assertion: token_store_path is not None when not in memory mode
+        assert (
+            self.token_store_path is not None
+        ), "token_store_path must be set when not using memory mode"
+
         try:
             self.token_store_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.token_store_path, "w") as f:

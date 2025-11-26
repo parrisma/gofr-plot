@@ -30,12 +30,19 @@ class MCPServerHelper(ServerHelper):
     """Helper for testing MCP server endpoints
 
     Example:
-        mcp = MCPServerHelper("http://localhost:8001", auth_token="...")
+        import os
+        mcp_port = os.environ.get('GPLOT_MCP_PORT', '8010')
+        mcp = MCPServerHelper(f"http://localhost:{mcp_port}", auth_token="...")
         response = mcp.create_chart("line", [1, 2, 3])
         assert response["success"]
     """
 
-    def __init__(self, base_url: str = "http://localhost:8001", auth_token: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, auth_token: Optional[str] = None):
+        if base_url is None:
+            import os
+
+            mcp_port = os.environ.get("GPLOT_MCP_PORT", "8010")
+            base_url = f"http://localhost:{mcp_port}"
         super().__init__(base_url, auth_token)
 
     def create_chart(
@@ -118,12 +125,19 @@ class WebServerHelper(ServerHelper):
     """Helper for testing Web server endpoints
 
     Example:
-        web = WebServerHelper("http://localhost:8000", auth_token="...")
+        import os
+        web_port = os.environ.get('GPLOT_WEB_PORT', '8012')
+        web = WebServerHelper(f"http://localhost:{web_port}", auth_token="...")
         response = web.render_chart("line", [1, 2, 3])
         assert response.status_code == 200
     """
 
-    def __init__(self, base_url: str = "http://localhost:8000", auth_token: Optional[str] = None):
+    def __init__(self, base_url: Optional[str] = None, auth_token: Optional[str] = None):
+        if base_url is None:
+            import os
+
+            web_port = os.environ.get("GPLOT_WEB_PORT", "8012")
+            base_url = f"http://localhost:{web_port}"
         super().__init__(base_url, auth_token)
 
     def render_chart(
@@ -194,7 +208,7 @@ class WebServerHelper(ServerHelper):
 def make_mcp_request(
     tool_name: str,
     arguments: Dict[str, Any],
-    base_url: str = "http://localhost:8001",
+    base_url: Optional[str] = None,
     auth_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Make a single MCP request
@@ -208,6 +222,11 @@ def make_mcp_request(
     Returns:
         Response dictionary
     """
+    if base_url is None:
+        import os
+
+        mcp_port = os.environ.get("GPLOT_MCP_PORT", "8010")
+        base_url = f"http://localhost:{mcp_port}"
     helper = MCPServerHelper(base_url, auth_token)
     return helper.call_tool(tool_name, arguments)
 
@@ -216,7 +235,7 @@ def make_web_request(
     endpoint: str,
     method: str = "POST",
     data: Optional[Dict] = None,
-    base_url: str = "http://localhost:8000",
+    base_url: Optional[str] = None,
     auth_token: Optional[str] = None,
 ) -> requests.Response:
     """Make a single Web API request
@@ -231,6 +250,11 @@ def make_web_request(
     Returns:
         Response object
     """
+    if base_url is None:
+        import os
+
+        web_port = os.environ.get("GPLOT_WEB_PORT", "8012")
+        base_url = f"http://localhost:{web_port}"
     helper = WebServerHelper(base_url, auth_token)
     url = f"{base_url}{endpoint}"
 

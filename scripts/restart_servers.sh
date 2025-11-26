@@ -8,10 +8,15 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# Default ports
-MCP_PORT=8001
-MCPO_PORT=8002
-WEB_PORT=8000
+# Source centralized environment configuration
+if [ -f "${PROJECT_ROOT}/gplot.env" ]; then
+    source "${PROJECT_ROOT}/gplot.env"
+fi
+
+# Default ports (from gplot.env or fallback)
+MCP_PORT=${GPLOT_MCP_PORT:-8010}
+MCPO_PORT=${GPLOT_MCPO_PORT:-8011}
+WEB_PORT=${GPLOT_WEB_PORT:-8012}
 
 # Colors
 RED='\033[0;31m'

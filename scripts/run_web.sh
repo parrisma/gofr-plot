@@ -15,10 +15,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# Source centralized environment configuration
+if [ -f "${PROJECT_ROOT}/gplot.env" ]; then
+    source "${PROJECT_ROOT}/gplot.env"
+fi
+
 # Configuration with environment variable fallbacks
-PORT="${GPLOT_WEB_PORT:-8000}"
+PORT="${GPLOT_WEB_PORT:-8012}"
 JWT_SECRET="${GPLOT_JWT_SECRET:-}"
-TOKEN_STORE="${GPLOT_TOKEN_STORE:-data/auth/tokens.json}"
+TOKEN_STORE="${GPLOT_TOKEN_STORE:-${GPLOT_LOGS}/gplot_tokens.json}"
 NO_AUTH="${GPLOT_NO_AUTH:-true}"
 
 # Parse command-line arguments
@@ -44,14 +49,14 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
-            echo "  --port PORT           Port to run web server on (default: 8000)"
+            echo "  --port PORT           Port to run web server on (default: 8012)"
             echo "  --jwt-secret SECRET   JWT secret for token validation"
             echo "  --token-store PATH    Path to token store JSON file"
             echo "  --no-auth             Disable authentication"
             echo "  -h, --help            Show this help message"
             echo ""
             echo "Environment Variables:"
-            echo "  GPLOT_WEB_PORT        Default port (default: 8000)"
+            echo "  GPLOT_WEB_PORT        Default port (default: 8012)"
             echo "  GPLOT_JWT_SECRET      Default JWT secret"
             echo "  GPLOT_TOKEN_STORE     Default token store path"
             echo "  GPLOT_NO_AUTH         Set to 'true' to disable auth"

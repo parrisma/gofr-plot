@@ -7,12 +7,13 @@ Run this to see what tools the MCP server exposes.
 import asyncio
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+from conftest import MCP_URL
 
 
 async def discover_mcp_server():
     """Connect to MCP server and list all available tools"""
 
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     print("=" * 60)
     print("MCP SERVER DISCOVERY")

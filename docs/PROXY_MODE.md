@@ -8,12 +8,18 @@ When the MCP server responds to a proxy mode render request, **the response incl
 Download URL: http://localhost:8000/proxy/{guid}
 ```
 
+**Aliases:** If you set an `alias` parameter when rendering (e.g., `alias: "q4-sales"`), you can also access the image using:
+```
+http://localhost:8000/proxy/q4-sales
+```
+
 **What to do:**
 1. ✅ Extract this URL from the response text
 2. ✅ Provide it directly to the user
 3. ✅ Tell them they can click it or paste it in a browser
-4. ❌ Don't say "I don't have access to the URL" - it's right there in the response!
-5. ❌ Don't call `get_image` tool unless specifically needed for base64 data
+4. ✅ Use aliases for memorable, reusable URLs
+5. ❌ Don't say "I don't have access to the URL" - it's right there in the response!
+6. ❌ Don't call `get_image` tool unless specifically needed for base64 data
 
 **Example Response Pattern to Look For:**
 ```
@@ -35,6 +41,55 @@ Proxy mode allows rendered images to be saved to disk with a unique GUID identif
 - **Deferred Retrieval**: Retrieve images later via multiple access methods
 - **Reusability**: Access the same image multiple times without re-rendering
 - **Direct Browser Access**: Get a URL that can be opened directly in any web browser
+- **Friendly Names**: Use aliases like "monthly-report" instead of GUIDs
+
+## Image Aliases
+
+Aliases provide human-friendly names for your stored images:
+
+### Benefits
+- **Memorable**: Use names like `q4-sales` instead of `a1b2c3d4-...`
+- **Stable URLs**: Update an image while keeping the same alias
+- **Group-Isolated**: Same alias can exist in different groups
+- **Persistent**: Aliases survive server restarts
+
+### Alias Rules
+- Length: 3-64 characters
+- Allowed: Letters, numbers, hyphens (`-`), underscores (`_`)
+- Examples: `q4-sales`, `monthly_report`, `chart2024`
+
+### Using Aliases
+
+**When Rendering:**
+```json
+{
+  "tool": "render_graph",
+  "arguments": {
+    "title": "Q4 Sales",
+    "y1": [10, 20, 30],
+    "proxy": true,
+    "alias": "q4-sales",
+    "token": "your-jwt-token"
+  }
+}
+```
+
+**When Retrieving:**
+```json
+{
+  "tool": "get_image",
+  "arguments": {
+    "identifier": "q4-sales",
+    "token": "your-jwt-token"
+  }
+}
+```
+
+**Via Web URL:**
+```
+http://localhost:8000/proxy/q4-sales
+http://localhost:8000/proxy/q4-sales/html
+```
 
 ## How It Works
 
@@ -48,7 +103,7 @@ Proxy mode allows rendered images to be saved to disk with a unique GUID identif
 
 ### 1. Render Image (Proxy Mode)
 
-**MCP Tool:**
+**MCP Tool (without alias):**
 ```json
 {
   "tool": "render_graph",
@@ -58,9 +113,40 @@ Proxy mode allows rendered images to be saved to disk with a unique GUID identif
     "y": [10, 25, 15, 30, 20],
     "type": "line",
     "format": "png",
-    "proxy": true
+    "proxy": true,
+    "token": "your-jwt-token"
   }
 }
+```
+
+**MCP Tool (with alias):**
+```json
+{
+  "tool": "render_graph",
+  "arguments": {
+    "title": "Sales Chart",
+    "x": [1, 2, 3, 4, 5],
+    "y": [10, 25, 15, 30, 20],
+    "type": "line",
+    "format": "png",
+    "proxy": true,
+    "alias": "sales-chart",
+    "token": "your-jwt-token"
+  }
+}
+```
+
+**Response (with alias):**
+```
+Image saved with GUID: a1b2c3d4-e5f6-7890-1234-567890abcdef
+Alias: sales-chart
+
+Chart: line - 'Sales Chart'
+Format: png
+
+Download URL: http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef
+Alias URL: http://localhost:8000/proxy/sales-chart
+(Or use get_image tool with identifier='sales-chart')
 ```
 
 **Response (URL mode - default):**
@@ -98,18 +184,19 @@ Use get_image tool with guid='a1b2c3d4-e5f6-7890-1234-567890abcdef' to retrieve 
 
 The server provides a complete download URL in the proxy mode response. Just use it!
 
-**For AI Assistants:** Simply extract the "Download URL" line from the response and provide it to the user. The URL format is:
-```
-http://localhost:8000/proxy/{guid}
-```
-
-**For Command Line:**
+**Using GUID:**
 ```bash
 curl http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef -o chart.png
 ```
 
+**Using Alias:**
+```bash
+curl http://localhost:8000/proxy/sales-chart -o chart.png
+```
+
 **For Web Browsers:**
 ```
+http://localhost:8000/proxy/sales-chart
 http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef
 ```
 
@@ -120,17 +207,25 @@ Click or paste this URL directly into any browser address bar to view or downloa
 {
   "tool": "get_image",
   "arguments": {
-    "guid": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+    "identifier": "sales-chart",
+    "token": "your-jwt-token"
   }
 }
 ```
 
-Returns base64-encoded image data.
+The `identifier` can be either a GUID or an alias. Returns base64-encoded image data.
 
-#### Option C: Web API (Legacy - Direct Access)
-```bash
-curl http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef -o chart.png
+#### Option C: MCP `list_images` Tool (Discover stored images)
+```json
+{
+  "tool": "list_images",
+  "arguments": {
+    "token": "your-jwt-token"
+  }
+}
 ```
+
+Returns a list of all images in your group with their GUIDs and aliases.
 
 #### Option D: Web Browser (HTML View)
 ```
@@ -208,27 +303,36 @@ All standard image formats are supported in proxy mode:
 
 #### `render_graph` (with proxy)
 - **Parameter**: `proxy: true`
-- **Returns**: Text with GUID and retrieval instructions
+- **Parameter**: `alias` (optional): Human-friendly name (3-64 chars)
+- **Returns**: Text with GUID, alias (if set), and retrieval instructions
 - **Storage**: Image saved to `{storage_dir}/{guid}.{format}`
 
 #### `get_image`
-- **Parameter**: `guid` (string, required)
+- **Parameter**: `identifier` (string, required) - GUID or alias
+- **Parameter**: `token` (string, required) - JWT authentication
 - **Returns**: ImageContent with base64 data
-- **Error**: 404 if GUID not found
+- **Error**: 404 if identifier not found
+
+#### `list_images`
+- **Parameter**: `token` (string, required) - JWT authentication
+- **Returns**: List of GUIDs with aliases for your group
+- **Purpose**: Discover stored images
 
 ### Web Endpoints
 
-#### `GET /proxy/{guid}`
+#### `GET /proxy/{identifier}`
+- **identifier**: GUID or registered alias
 - **Returns**: Raw image bytes
 - **Content-Type**: `image/png`, `image/bmp`, etc.
 - **Headers**: `Content-Disposition: inline; filename="{guid}.{format}"`
 
-#### `GET /proxy/{guid}/html`
+#### `GET /proxy/{identifier}/html`
+- **identifier**: GUID or registered alias
 - **Returns**: HTML page with embedded image
 - **Features**:
   - Responsive image display
   - Download button
-  - GUID and format information
+  - GUID/alias and format information
   - File size display
 
 #### `POST /render` (with proxy)

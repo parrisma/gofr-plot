@@ -54,30 +54,120 @@ The test runner automatically configures:
 ```
 test/
 ├── conftest.py              # Shared pytest fixtures
-├── auth/                    # Authentication & authorization tests
+├── auth/                    # Authentication & authorization tests (60+ tests)
 │   ├── test_authentication.py
 │   ├── test_auth_config.py
 │   ├── test_dependency_injection.py
 │   └── test_token_store_reload.py
-├── mcp/                     # MCP server tests
-│   ├── test_mcp_rendering.py
-│   ├── test_mcp_handlers.py
-│   ├── test_mcp_themes.py
-│   └── manual_*.py         # Manual test scripts (excluded from pytest)
-├── storage/                 # Storage layer tests
+├── mcp/                     # MCP server tests (81 tests)
+│   ├── test_mcp_rendering.py        # Chart rendering via MCP protocol
+│   ├── test_mcp_handlers.py         # Chart type handlers
+│   ├── test_mcp_themes.py           # Theme application
+│   ├── test_mcp_multi_dataset.py    # Multi-dataset support
+│   ├── test_mcp_proxy_mode.py       # GUID storage/retrieval
+│   └── manual_*.py                  # Manual test scripts (excluded from pytest)
+├── storage/                 # Storage layer tests (40+ tests)
 │   ├── test_concurrent_access.py
 │   ├── test_metadata_corruption.py
 │   ├── test_storage_failures.py
 │   └── test_storage_purge.py
-├── validation/              # Validation and rendering tests
+├── validation/              # Validation and rendering tests (50+ tests)
 │   ├── test_multi_dataset.py
 │   ├── test_axis_controls.py
 │   └── test_extreme_values.py
-└── web/                     # Web API tests
-    ├── test_web_rendering.py
-    ├── test_web_multi_dataset.py
-    └── manual_*.py         # Manual test scripts (excluded)
+└── web/                     # Web API tests (170+ tests)
+    ├── test_web_rendering.py        # Basic chart rendering
+    ├── test_web_multi_dataset.py    # Multi-dataset via REST
+    ├── test_web_proxy_mode.py       # Proxy endpoints
+    └── manual_*.py                  # Manual test scripts (excluded)
 ```
+
+### MCP Server Tests (81 tests)
+
+The MCP test suite covers Model Context Protocol functionality:
+
+**Test Categories:**
+- **Tool Discovery**: Verify `list_tools()` returns all available tools
+- **Rendering**: Test `render_graph` tool with all chart types
+- **Proxy Mode**: Test GUID generation and `get_image` retrieval
+- **Themes**: Verify theme application (light, dark, bizlight, bizdark)
+- **Multi-Dataset**: Test plotting up to 5 datasets simultaneously
+- **Validation**: Error handling for invalid parameters
+- **Authentication**: JWT token validation and group isolation
+
+**Key Test Files:**
+- `test_mcp_rendering.py` - Core rendering functionality
+- `test_mcp_handlers.py` - Chart type handlers (line, bar, scatter)
+- `test_mcp_themes.py` - Theme application
+- `test_mcp_multi_dataset.py` - Multi-dataset rendering
+- `test_mcp_proxy_mode.py` - GUID storage and retrieval
+
+**Running MCP Tests:**
+```bash
+# Without servers (unit tests only)
+./scripts/run_tests.sh --no-servers test/mcp/
+
+# With MCP server (full integration)
+./scripts/run_tests.sh --with-servers test/mcp/
+```
+
+**Manual Testing:**
+```bash
+# Start MCP server
+python app/main_mcp.py --port 8001 --jwt-secret "test-secret"
+
+# Run manual test script
+python test/mcp/manual_test_mcp_server.py
+```
+
+### Web Server Tests (170+ tests)
+
+The Web test suite covers FastAPI REST API functionality:
+
+**Test Categories:**
+- **Rendering**: POST `/render` endpoint with all parameters
+- **Formats**: PNG, JPG, SVG, PDF output formats
+- **Themes**: Light, dark, bizlight, bizdark themes
+- **Multi-Dataset**: Up to 5 datasets per chart
+- **Proxy Mode**: POST with `proxy=true`, GET `/proxy/{guid}`
+- **Validation**: 422 errors for invalid parameters
+- **Authentication**: JWT Bearer token validation
+- **Health Check**: GET `/ping` endpoint
+
+**Key Test Files:**
+- `test_web_rendering.py` - Basic rendering (13 tests)
+  - Line charts with base64
+  - Bar charts with direct image
+  - Scatter plots
+  - Dark/Light themes
+  - SVG/PDF formats
+  - Custom styling
+- `test_web_multi_dataset.py` - Multi-dataset support (45 tests)
+- `test_web_proxy_mode.py` - Proxy endpoints
+- `test_ping.py` - Health check (4 tests)
+
+**Running Web Tests:**
+```bash
+# Without servers (unit tests only)
+./scripts/run_tests.sh --no-servers test/web/
+
+# With Web server (full integration)
+./scripts/run_tests.sh --with-servers test/web/
+```
+
+**Manual Testing:**
+```bash
+# Start web server
+python app/main_web.py --port 8000 --jwt-secret "test-secret"
+
+# Test with curl
+curl -X POST http://localhost:8000/render \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <token>" \
+  -d '{"x": [1,2,3], "y": [4,5,6], "title": "Test"}'
+```
+
+**Note:** Web tests use FastAPI's TestClient with dependency override to bypass JWT authentication for unit testing, allowing focus on rendering functionality without token management.
 
 ## Test Fixtures
 
@@ -341,8 +431,11 @@ The test runner includes detection for stale log files. If tests hang:
 ./scripts/run_tests.sh --with-servers  # Includes automatic cleanup
 ```
 
-## Related Documentation
+## See Also
 
-- [SECURITY.md](SECURITY.md) - Authentication and authorization details
-- [AUTHENTICATION.md](AUTHENTICATION.md) - JWT token usage
-- [STORAGE.md](STORAGE.md) - Storage layer design
+- **[TEST_AUTH.md](./TEST_AUTH.md)** - Comprehensive authentication testing guide
+- **[AUTHENTICATION.md](./AUTHENTICATION.md)** - JWT token creation and usage
+- **[SECURITY.md](./SECURITY.md)** - Security architecture and best practices
+- **[STORAGE.md](./STORAGE.md)** - Storage layer design and concurrency
+- **[MCP_README.md](./MCP_README.md)** - MCP protocol details
+- **[PROXY_MODE.md](./PROXY_MODE.md)** - GUID-based storage and retrieval

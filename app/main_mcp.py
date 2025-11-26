@@ -1,9 +1,9 @@
 import argparse
 import sys
 import asyncio
-from pathlib import Path
 from app.settings import Settings
 from app.auth import AuthService
+from app.startup import resolve_auth_config
 from app.logger import ConsoleLogger
 import logging
 
@@ -72,8 +72,15 @@ if __name__ == "__main__":
     startup_logger = ConsoleLogger(name="startup", level=log_level)
 
     try:
+        # Resolve authentication configuration using centralized resolver
+        jwt_secret, token_store_path, require_auth = resolve_auth_config(
+            jwt_secret=args.jwt_secret,
+            token_store_path=args.token_store,
+            require_auth=not args.no_auth,
+            allow_auto_secret=True,
+        )
+
         # Build settings from environment and CLI args
-        require_auth = not args.no_auth
         settings = Settings.from_env(require_auth=require_auth)
 
         # Override with CLI arguments if provided
@@ -81,10 +88,12 @@ if __name__ == "__main__":
             settings.server.host = args.host
         if args.port:
             settings.server.mcp_port = args.port
-        if args.jwt_secret:
-            settings.auth.jwt_secret = args.jwt_secret
-        if args.token_store:
-            settings.auth.token_store_path = Path(args.token_store)
+
+        # Use resolved auth configuration
+        if require_auth:
+            settings.auth.jwt_secret = jwt_secret
+            settings.auth.token_store_path = token_store_path
+            settings.auth.require_auth = True
 
         # Resolve defaults and validate
         settings.resolve_defaults()
@@ -102,8 +111,8 @@ if __name__ == "__main__":
     auth_service = None
     if require_auth:
         auth_service = AuthService(
-            secret_key=settings.auth.jwt_secret,
-            token_store_path=str(settings.auth.token_store_path),
+            secret_key=jwt_secret,
+            token_store_path=str(token_store_path),
         )
         startup_logger.info(
             "Authentication service initialized",

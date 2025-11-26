@@ -17,9 +17,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# Source centralized environment configuration
+if [ -f "${PROJECT_ROOT}/gplot.env" ]; then
+    source "${PROJECT_ROOT}/gplot.env"
+fi
+
 # Configuration with environment variable fallbacks
-MCPO_PORT="${GPLOT_MCPO_PORT:-8002}"
-MCP_PORT="${GPLOT_MCP_PORT:-8001}"
+MCPO_PORT="${GPLOT_MCPO_PORT:-8011}"
+MCP_PORT="${GPLOT_MCP_PORT:-8010}"
 MCP_URL="http://localhost:${MCP_PORT}/mcp"
 MCPO_API_KEY="${GPLOT_MCPO_API_KEY:-}"
 
@@ -45,14 +50,14 @@ while [[ $# -gt 0 ]]; do
             echo "Starts MCPO wrapper to expose MCP server as OpenAPI/REST endpoints."
             echo ""
             echo "Options:"
-            echo "  --port PORT           Port for MCPO to listen on (default: 8002)"
-            echo "  --mcp-port PORT       Port where MCP server is running (default: 8001)"
+            echo "  --port PORT           Port for MCPO to listen on (default: 8011)"
+            echo "  --mcp-port PORT       Port where MCP server is running (default: 8010)"
             echo "  --api-key KEY         MCPO API key (optional, for additional auth layer)"
             echo "  -h, --help            Show this help message"
             echo ""
             echo "Environment Variables:"
-            echo "  GPLOT_MCPO_PORT       Default MCPO port (default: 8002)"
-            echo "  GPLOT_MCP_PORT        Default MCP port (default: 8001)"
+            echo "  GPLOT_MCPO_PORT       Default MCPO port (default: 8011)"
+            echo "  GPLOT_MCP_PORT        Default MCP port (default: 8010)"
             echo "  GPLOT_MCPO_API_KEY    MCPO API key (optional)"
             echo ""
             echo "Authentication:"
@@ -60,9 +65,9 @@ while [[ $# -gt 0 ]]; do
             echo "  - With --api-key: Additional auth layer at MCPO boundary"
             echo ""
             echo "Connection URLs:"
-            echo "  OpenAPI Spec: http://localhost:8002/openapi.json"
-            echo "  Health Check: http://localhost:8002/health"
-            echo "  Service URL:  http://localhost:8002/gplot-renderer"
+            echo "  OpenAPI Spec: http://localhost:8011/openapi.json"
+            echo "  Health Check: http://localhost:8011/health"
+            echo "  Service URL:  http://localhost:8011/gplot-renderer"
             exit 0
             ;;
         *)

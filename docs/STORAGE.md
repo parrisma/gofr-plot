@@ -17,11 +17,20 @@ app/storage/
 
 `ImageStorageBase` defines the contract that all storage implementations must follow:
 
-- `save_image(image_data: bytes, format: str) -> str` - Save image and return identifier
-- `get_image(identifier: str) -> Optional[Tuple[bytes, str]]` - Retrieve image by identifier
-- `delete_image(identifier: str) -> bool` - Delete image by identifier
-- `list_images() -> List[str]` - List all stored identifiers
-- `exists(identifier: str) -> bool` - Check if image exists
+### Core Methods
+- `save_image(image_data: bytes, format: str, group: str) -> str` - Save image and return identifier
+- `get_image(identifier: str, group: str) -> Optional[Tuple[bytes, str]]` - Retrieve image by identifier
+- `delete_image(identifier: str, group: str) -> bool` - Delete image by identifier
+- `list_images(group: str) -> List[str]` - List all stored identifiers
+- `exists(identifier: str, group: str) -> bool` - Check if image exists
+- `purge(age_days: int, group: str) -> int` - Delete old images
+
+### Alias Methods
+- `resolve_identifier(identifier: str, group: str) -> Optional[str]` - Resolve alias or GUID to GUID
+- `register_alias(alias: str, guid: str, group: str) -> None` - Register an alias for a GUID
+- `unregister_alias(alias: str, group: str) -> bool` - Remove an alias registration
+- `get_alias(guid: str) -> Optional[str]` - Get alias for a GUID
+- `list_aliases(group: str) -> dict` - List all aliases in a group
 
 ## Current Implementation
 
@@ -78,6 +87,42 @@ if storage.delete_image(guid):
 # List all images
 guids = storage.list_images()
 print(f"Total images: {len(guids)}")
+```
+
+### Using Aliases
+
+Aliases provide human-friendly names for stored images:
+
+```python
+from app.storage import get_storage
+
+storage = get_storage()
+
+# Save an image and register an alias
+guid = storage.save_image(image_bytes, format="png", group="my-group")
+storage.register_alias("monthly-report", guid, "my-group")
+
+# Resolve identifier (works with both alias and GUID)
+resolved_guid = storage.resolve_identifier("monthly-report", group="my-group")
+print(f"Resolved to: {resolved_guid}")  # prints the GUID
+
+# Get alias for a GUID
+alias = storage.get_alias(guid)
+print(f"Alias: {alias}")  # prints "monthly-report"
+
+# List all aliases in a group
+aliases = storage.list_aliases("my-group")
+print(f"Aliases: {aliases}")  # {'monthly-report': 'guid-here'}
+
+# Unregister an alias
+storage.unregister_alias("monthly-report", "my-group")
+```
+
+**Alias Rules:**
+- Length: 3-64 characters
+- Allowed characters: `a-z`, `A-Z`, `0-9`, `-`, `_`
+- Group-isolated: Same alias can exist in different groups
+- Persistent: Aliases are stored in metadata and survive restarts
 ```
 
 ### Custom Storage Implementation

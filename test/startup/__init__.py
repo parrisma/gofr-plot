@@ -1,0 +1,1 @@
+"""Test startup module initialization"""

@@ -3,6 +3,7 @@
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+from conftest import MCP_URL
 
 # Note: logger fixture is now defined in conftest.py
 
@@ -12,7 +13,7 @@ async def test_render_two_datasets_mcp(test_jwt_token, logger):
     """Test rendering two datasets via MCP"""
     logger.info("Testing MCP render with two datasets")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -42,7 +43,7 @@ async def test_render_three_datasets_bar_mcp(test_jwt_token, logger):
     """Test rendering three datasets as grouped bars via MCP"""
     logger.info("Testing MCP render with three datasets (bar chart)")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -70,7 +71,7 @@ async def test_render_five_datasets_mcp(test_jwt_token, logger):
     """Test rendering maximum five datasets via MCP"""
     logger.info("Testing MCP render with five datasets")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -103,7 +104,7 @@ async def test_render_without_x_axis_mcp(test_jwt_token, logger):
     """Test rendering with auto-generated X-axis via MCP"""
     logger.info("Testing MCP render without x-axis (auto-indexed)")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -129,7 +130,7 @@ async def test_render_with_axis_controls_mcp(test_jwt_token, logger):
     """Test multi-dataset rendering with axis controls via MCP"""
     logger.info("Testing MCP render with multi-dataset and axis controls")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -164,7 +165,7 @@ async def test_render_backward_compatible_mcp(test_jwt_token, logger):
     """Test backward compatibility (old 'y' parameter) via MCP"""
     logger.info("Testing MCP render with backward compatible parameters")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -191,7 +192,7 @@ async def test_render_different_themes_mcp(test_jwt_token, logger):
 
     themes = ["light", "dark", "bizlight", "bizdark"]
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -219,7 +220,7 @@ async def test_render_proxy_mode_multi_dataset_mcp(test_jwt_token, logger):
     """Test multi-dataset rendering with proxy mode via MCP"""
     logger.info("Testing MCP render with multi-dataset in proxy mode")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -250,7 +251,7 @@ async def test_validation_mismatched_lengths_mcp(test_jwt_token, logger):
     """Test validation error for mismatched dataset lengths via MCP"""
     logger.info("Testing MCP validation with mismatched lengths")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 

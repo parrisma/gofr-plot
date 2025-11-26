@@ -10,8 +10,9 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
 import logging
+from conftest import MCP_URL
 
-MCP_URL = "http://localhost:8001/mcp/"
+MCP_URL = MCP_URL
 
 
 @pytest.fixture
@@ -34,7 +35,9 @@ class TestToolDescriptions:
 
         description = ping_tool.description.lower()
         assert (
-            "does not require" in description or "no auth" in description
+            "does not require" in description
+            or "no auth" in description
+            or "not required" in description
         ), "ping should explicitly state authentication is not required"
 
     @pytest.mark.asyncio
@@ -140,14 +143,16 @@ class TestInputSchemaExamples:
         assert "eyJ" in token_desc, "token parameter should include example JWT starting with 'eyJ'"
 
     @pytest.mark.asyncio
-    async def test_guid_parameter_has_example(self, tools):
-        """GUID parameter should show example format."""
+    async def test_identifier_parameter_has_example(self, tools):
+        """Identifier parameter should show example format."""
         get_image_tool = next(t for t in tools if t.name == "get_image")
 
-        guid_desc = get_image_tool.inputSchema["properties"]["guid"]["description"]
+        identifier_desc = get_image_tool.inputSchema["properties"]["identifier"]["description"]
         assert (
-            "-" in guid_desc or "uuid" in guid_desc.lower()
-        ), "guid parameter should mention UUID format or show example with hyphens"
+            "-" in identifier_desc
+            or "uuid" in identifier_desc.lower()
+            or "alias" in identifier_desc.lower()
+        ), "identifier parameter should mention UUID format, alias, or show example"
 
 
 class TestErrorResponseFormat:

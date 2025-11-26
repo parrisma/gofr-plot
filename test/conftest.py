@@ -15,6 +15,16 @@ from app.config import Config
 from app.storage import reset_storage, get_storage
 from app.auth import AuthService
 
+# Test server configuration - reads from environment (set by run_tests.sh)
+MCP_PORT = int(os.environ.get("GPLOT_MCP_PORT", "8010"))
+WEB_PORT = int(os.environ.get("GPLOT_WEB_PORT", "8012"))
+MCPO_PORT = int(os.environ.get("GPLOT_MCPO_PORT", "8011"))
+
+# Test URL constants
+MCP_URL = f"http://localhost:{MCP_PORT}/mcp/"
+WEB_URL = f"http://localhost:{WEB_PORT}"
+MCPO_URL = f"http://localhost:{MCPO_PORT}"
+
 
 @pytest.fixture(scope="function", autouse=True)
 def test_data_dir(tmp_path):

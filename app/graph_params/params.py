@@ -40,6 +40,9 @@ class GraphParams(BaseModel):
     format: str = "png"  # Validated by GraphDataValidator for better error messages
     return_base64: bool = True  # False to return image directly
     proxy: bool = False  # If True, save to disk and return GUID instead of base64
+    alias: Optional[str] = (
+        None  # Optional memorable name for proxy mode (3-64 chars, alphanumeric + hyphens/underscores)
+    )
     line_width: float = 2.0  # for line plots
     marker_size: float = 36.0  # for scatter plots
     alpha: float = 1.0  # transparency (0.0 to 1.0)

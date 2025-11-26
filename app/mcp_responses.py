@@ -138,26 +138,78 @@ AUTH_REQUIRED_ERROR = format_error(
     ],
 )
 
+
 def AUTH_INVALID_ERROR(error_msg):
     return format_error(
-    "Authentication",
-    f"Token validation failed: {error_msg}",
-    [
-        "Verify the token hasn't expired",
-        "Check that the token signature is valid",
-        "Ensure the token store hasn't been cleared",
-        "Generate a new token if needed",
-    ],
-)
+        "Authentication",
+        f"Token validation failed: {error_msg}",
+        [
+            "Verify the token hasn't expired",
+            "Check that the token signature is valid",
+            "Ensure the token store hasn't been cleared",
+            "Generate a new token if needed",
+        ],
+    )
+
 
 def PERMISSION_DENIED_ERROR(resource_id, group):
     return format_error(
-    "Authorization",
-    "Access denied to the requested resource",
-    [
-        "The resource belongs to a different security group",
-        "Verify you are using the correct authentication token for this resource",
-        "Contact your administrator if you need access to this group",
-    ],
-    {"resource": resource_id, "your_group": group},
-)
+        "Authorization",
+        "Access denied to the requested resource",
+        [
+            "The resource belongs to a different security group",
+            "Verify you are using the correct authentication token for this resource",
+            "Contact your administrator if you need access to this group",
+        ],
+        {"resource": resource_id, "your_group": group},
+    )
+
+
+def format_parameter_error(
+    parameter_name: str,
+    provided_value: str | None,
+    expected_type: str,
+    additional_guidance: list[str] | None = None,
+) -> list[TextContent | ImageContent | EmbeddedResource]:
+    """Format a consistent parameter validation error.
+
+    Args:
+        parameter_name: Name of the invalid parameter
+        provided_value: The value that was provided (or None if missing)
+        expected_type: Expected type/format description
+        additional_guidance: Optional list of specific guidance for this parameter
+
+    Returns:
+        List containing a single TextContent with formatted parameter error
+
+    Example:
+        >>> format_parameter_error(
+        ...     "guid",
+        ...     "invalid-guid",
+        ...     "valid UUID format with hyphens",
+        ...     ["Example: '550e8400-e29b-41d4-a716-446655440000'"]
+        ... )
+    """
+    if provided_value is None:
+        message = f"Required parameter '{parameter_name}' was not provided"
+        suggestions = [
+            f"Action Required: Include the '{parameter_name}' parameter in your request",
+            f"Expected Type: {expected_type}",
+        ]
+    else:
+        message = f"Invalid value for parameter '{parameter_name}': {provided_value}"
+        suggestions = [
+            f"Provided: {provided_value}",
+            f"Expected: {expected_type}",
+            f"Action Required: Correct the '{parameter_name}' parameter and retry",
+        ]
+
+    if additional_guidance:
+        suggestions.extend(additional_guidance)
+
+    return format_error(
+        "Parameter Validation",
+        message,
+        suggestions,
+        {"parameter": parameter_name, "expected_type": expected_type},
+    )

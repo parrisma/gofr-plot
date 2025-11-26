@@ -3,10 +3,11 @@
 Uses separate metadata and blob repositories for better separation of concerns.
 """
 
+import re
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List
+from typing import Optional, Tuple, List, Dict
 from app.storage.base import ImageStorageBase
 from app.storage.metadata import JsonMetadataRepository, ImageMetadata
 from app.storage.blob import FileBlobRepository
@@ -36,6 +37,11 @@ class FileStorageV2(ImageStorageBase):
         # Initialize repositories
         self.metadata_repo = JsonMetadataRepository(storage_path / "metadata.json")
         self.blob_repo = FileBlobRepository(storage_path)
+
+        # Alias maps: group -> alias -> guid, guid -> alias
+        self._alias_to_guid: Dict[str, Dict[str, str]] = {}
+        self._guid_to_alias: Dict[str, str] = {}
+        self._rebuild_alias_maps()
 
         self.logger.info("FileStorageV2 initialized", directory=str(storage_path))
 
@@ -293,3 +299,157 @@ class FileStorageV2(ImageStorageBase):
         except Exception as e:
             self.logger.error("Purge operation failed", error=str(e))
             raise RuntimeError(f"Failed to purge images: {str(e)}")
+
+    # === Alias Methods ===
+
+    def _rebuild_alias_maps(self) -> None:
+        """Rebuild alias maps from persisted metadata"""
+        self._alias_to_guid.clear()
+        self._guid_to_alias.clear()
+
+        # Iterate through all metadata entries
+        for guid in self.metadata_repo.list_all():
+            metadata = self.metadata_repo.get(guid)
+            if metadata and metadata.extra.get("alias"):
+                alias = metadata.extra["alias"]
+                group = metadata.group or "default"
+
+                # Build maps
+                if group not in self._alias_to_guid:
+                    self._alias_to_guid[group] = {}
+                self._alias_to_guid[group][alias] = guid
+                self._guid_to_alias[guid] = alias
+
+    def _validate_alias(self, alias: str) -> None:
+        """Validate alias format
+
+        Args:
+            alias: Alias string to validate
+
+        Raises:
+            ValueError: If alias format is invalid
+        """
+        if not re.match(r"^[a-zA-Z0-9_-]{3,64}$", alias):
+            raise ValueError(
+                f"Invalid alias format: '{alias}'. Must be 3-64 characters, "
+                "alphanumeric with hyphens/underscores only."
+            )
+
+    def resolve_identifier(self, identifier: str, group: Optional[str] = None) -> Optional[str]:
+        """Resolve alias or GUID to GUID
+
+        Args:
+            identifier: Alias or GUID string
+            group: Optional group name for alias resolution
+
+        Returns:
+            GUID string if found, None otherwise
+        """
+        # Try as GUID first
+        try:
+            uuid.UUID(identifier)
+            return identifier  # Valid GUID, return as-is
+        except ValueError:
+            pass
+
+        # Try as alias
+        if group and group in self._alias_to_guid:
+            return self._alias_to_guid[group].get(identifier)
+
+        return None
+
+    def register_alias(self, alias: str, guid: str, group: str) -> None:
+        """Register an alias for a GUID
+
+        Args:
+            alias: Alias string
+            guid: GUID to associate with alias
+            group: Group name for isolation
+
+        Raises:
+            ValueError: If alias format invalid or already exists
+        """
+        self._validate_alias(alias)
+
+        # Check if alias already exists in this group
+        if group in self._alias_to_guid and alias in self._alias_to_guid[group]:
+            existing_guid = self._alias_to_guid[group][alias]
+            if existing_guid != guid:
+                raise ValueError(
+                    f"Alias '{alias}' already exists in group '{group}' "
+                    f"for a different image (GUID: {existing_guid})"
+                )
+            return  # Already registered for same GUID
+
+        # Verify GUID exists
+        if not self.metadata_repo.exists(guid):
+            raise ValueError(f"Cannot register alias: GUID '{guid}' not found")
+
+        # Update in-memory maps
+        if group not in self._alias_to_guid:
+            self._alias_to_guid[group] = {}
+        self._alias_to_guid[group][alias] = guid
+        self._guid_to_alias[guid] = alias
+
+        # Persist alias in metadata
+        metadata = self.metadata_repo.get(guid)
+        if metadata:
+            # Create updated metadata with alias
+            updated_data = metadata.to_dict()
+            updated_data["alias"] = alias
+            updated_metadata = ImageMetadata.from_dict(guid, updated_data)
+            self.metadata_repo.save(updated_metadata)
+
+        self.logger.info("Alias registered", alias=alias, guid=guid, group=group)
+
+    def unregister_alias(self, alias: str, group: str) -> bool:
+        """Remove an alias registration
+
+        Args:
+            alias: Alias to remove
+            group: Group name
+
+        Returns:
+            True if removed, False if not found
+        """
+        if group not in self._alias_to_guid:
+            return False
+
+        if alias not in self._alias_to_guid[group]:
+            return False
+
+        guid = self._alias_to_guid[group].pop(alias)
+        self._guid_to_alias.pop(guid, None)
+
+        # Remove alias from metadata
+        metadata = self.metadata_repo.get(guid)
+        if metadata and metadata.extra.get("alias"):
+            updated_data = metadata.to_dict()
+            del updated_data["alias"]
+            updated_metadata = ImageMetadata.from_dict(guid, updated_data)
+            self.metadata_repo.save(updated_metadata)
+
+        self.logger.info("Alias unregistered", alias=alias, guid=guid, group=group)
+        return True
+
+    def get_alias(self, guid: str) -> Optional[str]:
+        """Get alias for a GUID
+
+        Args:
+            guid: GUID string
+
+        Returns:
+            Alias if registered, None otherwise
+        """
+        return self._guid_to_alias.get(guid)
+
+    def list_aliases(self, group: str) -> dict:
+        """List all aliases in a group
+
+        Args:
+            group: Group name
+
+        Returns:
+            Dictionary mapping aliases to GUIDs
+        """
+        return dict(self._alias_to_guid.get(group, {}))

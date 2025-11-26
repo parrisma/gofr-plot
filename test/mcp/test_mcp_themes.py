@@ -3,6 +3,7 @@
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+from conftest import MCP_URL
 
 # Note: logger fixture is now defined in conftest.py
 
@@ -10,7 +11,7 @@ from mcp.client.streamable_http import streamablehttp_client
 @pytest.mark.asyncio
 async def test_list_themes_tool_exists():
     """Test that list_themes tool is available in MCP server"""
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -27,7 +28,7 @@ async def test_list_themes_tool_no_parameters(logger):
     """Test that list_themes tool requires no parameters"""
     logger.info("Testing list_themes tool")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -48,7 +49,7 @@ async def test_list_themes_returns_all_themes(logger):
     """Test that list_themes returns all expected themes"""
     logger.info("Testing list_themes returns all themes")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -70,7 +71,7 @@ async def test_list_themes_includes_descriptions(logger):
     """Test that list_themes includes descriptions for each theme"""
     logger.info("Testing list_themes includes descriptions")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -98,7 +99,7 @@ async def test_list_themes_formatted_correctly(logger):
     """Test that list_themes output is properly formatted"""
     logger.info("Testing list_themes formatting")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 

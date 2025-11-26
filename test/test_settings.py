@@ -19,6 +19,7 @@ def test_server_settings_defaults():
     """Test ServerSettings has correct defaults"""
     settings = ServerSettings()
     assert settings.host == "0.0.0.0"
+    # Test hardcoded defaults (backward compatibility)
     assert settings.mcp_port == 8001
     assert settings.web_port == 8000
     assert settings.mcpo_port == 8002

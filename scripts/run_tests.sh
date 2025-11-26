@@ -16,22 +16,30 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# Source centralized environment configuration in TEST mode
+export GPLOT_ENV="TEST"
+if [ -f "${PROJECT_ROOT}/gplot.env" ]; then
+    source "${PROJECT_ROOT}/gplot.env"
+fi
+
 # Shared authentication configuration
 export GPLOT_JWT_SECRET="test-secret-key-for-secure-testing-do-not-use-in-production"
-export GPLOT_TOKEN_STORE="/tmp/gplot_test_tokens.json"
-export GPLOT_MCP_PORT="8001"
-export GPLOT_WEB_PORT="8000"
-export GPLOT_MCPO_PORT="8002"
+export GPLOT_TOKEN_STORE="${GPLOT_TOKEN_STORE:-${GPLOT_LOGS}/gplot_tokens_test.json}"
+export GPLOT_MCP_PORT="${GPLOT_MCP_PORT:-8010}"
+export GPLOT_WEB_PORT="${GPLOT_WEB_PORT:-8012}"
+export GPLOT_MCPO_PORT="${GPLOT_MCPO_PORT:-8011}"
 
-# Ensure baseline test directories exist
-TEST_DATA_ROOT="test/data"
-STORAGE_DIR="${TEST_DATA_ROOT}/storage"
-AUTH_DIR="${TEST_DATA_ROOT}/auth"
+# Use centralized paths from gplot.env or fallback
+TEST_DATA_ROOT="${GPLOT_DATA:-test/data}"
+STORAGE_DIR="${GPLOT_STORAGE:-${TEST_DATA_ROOT}/storage}"
+AUTH_DIR="${GPLOT_AUTH:-${TEST_DATA_ROOT}/auth}"
+# Directories are auto-created by gplot.env, but ensure they exist
 mkdir -p "${STORAGE_DIR}" "${AUTH_DIR}"
 
 print_header() {
     echo -e "${GREEN}=== GPLOT Test Runner ===${NC}"
-    echo "Project root: ${PROJECT_ROOT}"al
+    echo "Project root: ${PROJECT_ROOT}"
+    echo "Environment: ${GPLOT_ENV:-NONE}"
     echo "JWT Secret: ${GPLOT_JWT_SECRET:0:20}..."
     echo "Token store: ${GPLOT_TOKEN_STORE}"
     echo "MCP Port: ${GPLOT_MCP_PORT}"

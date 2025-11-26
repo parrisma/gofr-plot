@@ -17,10 +17,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# Source centralized environment configuration
+if [ -f "${PROJECT_ROOT}/gplot.env" ]; then
+    source "${PROJECT_ROOT}/gplot.env"
+fi
+
 # Default configuration
 MODE="${GPLOT_MCPO_MODE:-public}"
-MCPO_PORT="${GPLOT_MCPO_PORT:-8002}"
-MCP_PORT="${GPLOT_MCP_PORT:-8001}"
+MCPO_PORT="${GPLOT_MCPO_PORT:-8011}"
+MCP_PORT="${GPLOT_MCP_PORT:-8010}"
 MCPO_API_KEY="${GPLOT_MCPO_API_KEY:-changeme}"
 JWT_TOKEN="${GPLOT_JWT_TOKEN:-}"
 
@@ -54,16 +59,16 @@ while [[ $# -gt 0 ]]; do
             echo ""
             echo "Options:"
             echo "  --mode MODE           Authentication mode: 'auth' or 'public' (default: public)"
-            echo "  --mcp-port PORT       MCP server port (default: 8001)"
-            echo "  --mcpo-port PORT      MCPO proxy port (default: 8002)"
+            echo "  --mcp-port PORT       MCP server port (default: 8010)"
+            echo "  --mcpo-port PORT      MCPO proxy port (default: 8011)"
             echo "  --api-key KEY         MCPO API key for OpenWebUI (default: changeme)"
             echo "  --jwt-token TOKEN     JWT token for MCP auth (required for auth mode)"
             echo "  -h, --help            Show this help message"
             echo ""
             echo "Environment Variables:"
             echo "  GPLOT_MCPO_MODE       Authentication mode (default: public)"
-            echo "  GPLOT_MCP_PORT        MCP server port (default: 8001)"
-            echo "  GPLOT_MCPO_PORT       MCPO proxy port (default: 8002)"
+            echo "  GPLOT_MCP_PORT        MCP server port (default: 8010)"
+            echo "  GPLOT_MCPO_PORT       MCPO proxy port (default: 8011)"
             echo "  GPLOT_MCPO_API_KEY    MCPO API key (default: changeme)"
             echo "  GPLOT_JWT_TOKEN       JWT token for MCP auth"
             echo ""

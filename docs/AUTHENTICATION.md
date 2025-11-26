@@ -376,3 +376,121 @@ Tokens are stored in JSON format:
 - [ ] Back up token store securely
 - [ ] Document group naming conventions for your organization
 - [ ] Set up monitoring/alerting for authentication failures
+
+---
+
+## Advanced Features
+
+### Token Fingerprinting
+
+Binds tokens to specific devices/clients to prevent token theft and replay attacks.
+
+**How it works:**
+- Generates a fingerprint from request context (User-Agent + Client IP)
+- Stores fingerprint in JWT `fp` claim during token creation
+- Validates fingerprint matches on every token verification
+
+**Usage:**
+
+```python
+from app.auth import AuthService
+
+auth = AuthService(secret_key="your-secret")
+
+# Create token with fingerprint
+fingerprint = "device-fingerprint-hash"  # Hash of user-agent + IP
+token = auth.create_token(
+    group="user-group",
+    expires_in_seconds=3600,
+    fingerprint=fingerprint
+)
+
+# Verify token with fingerprint
+token_info = auth.verify_token(token, fingerprint=fingerprint)  # ✅ Success
+
+# Attempting to use token from different device fails
+different_fp = "different-device-hash"
+token_info = auth.verify_token(token, fingerprint=different_fp)  # ❌ Raises ValueError
+```
+
+**Automatic Fingerprinting in Middleware:**
+
+```python
+from fastapi import Depends, Request
+from app.auth import verify_token
+
+@app.get("/protected")
+async def protected_route(
+    request: Request,  # Required for fingerprinting
+    token_info: TokenInfo = Depends(verify_token)
+):
+    # Token automatically validated with device fingerprint
+    return {"group": token_info.group}
+```
+
+### Additional JWT Claims
+
+Enhanced tokens include security-focused JWT standard claims:
+
+| Claim | Description | Required | Validated |
+|-------|-------------|----------|-----------|
+| `iat` | Issued At - timestamp when token created | Yes | Yes |
+| `exp` | Expires - timestamp when token expires | Yes | Yes |
+| `nbf` | Not Before - token not valid until this time | Yes | Yes |
+| `aud` | Audience - intended recipient (`gplot-api`) | Yes | Yes (if present) |
+| `jti` | JWT ID - unique token identifier | Optional | No |
+| `fp` | Fingerprint - device binding hash | Optional | Yes (if present) |
+| `group` | Group - user's group for access control | Yes | Yes |
+
+**Example Token Payload:**
+
+```json
+{
+  "group": "analytics-team",
+  "iat": 1700000000,
+  "exp": 1700003600,
+  "nbf": 1700000000,
+  "aud": "gplot-api",
+  "jti": "unique-token-id-123",
+  "fp": "a7f3d8e9c2b1..."
+}
+```
+
+### Token Secret Fingerprinting
+
+The `AuthService` can generate a fingerprint of the JWT secret for verification and auditing purposes:
+
+```python
+from app.auth import AuthService
+
+auth = AuthService(secret_key="your-secret")
+fingerprint = auth.get_secret_fingerprint()
+
+print(f"Secret fingerprint: {fingerprint}")
+# Output: Secret fingerprint: 2cf24dba5fb0a30e...
+```
+
+**Use cases:**
+- Verify all services use the same JWT secret
+- Audit secret rotation
+- Debug authentication issues without exposing secret
+
+### Backward Compatibility
+
+The authentication system maintains backward compatibility with older tokens:
+
+- **Legacy tokens**: Tokens without `fp`, `aud`, or `jti` claims still work
+- **Optional fingerprinting**: Fingerprint validation only enforced if `fp` claim present
+- **Optional audience**: Audience validation only enforced if `aud` claim present
+- **Token store**: Both old and new tokens coexist in token store
+
+This ensures smooth transitions during token rotation and system upgrades.
+
+---
+
+## See Also
+
+- **[SECURITY.md](./SECURITY.md)** - Security architecture and best practices
+- **[TEST_AUTH.md](./TEST_AUTH.md)** - Authentication testing guide
+- **[DEPENDENCY_INJECTION.md](./DEPENDENCY_INJECTION.md)** - Auth service injection patterns
+- **[SCRIPTS.md](./SCRIPTS.md)** - Token management scripts

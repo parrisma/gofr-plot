@@ -57,6 +57,8 @@ Renders a graph (line, scatter, or bar chart) and returns it as a base64-encoded
 - `type` (string, optional): Graph type - "line", "scatter", or "bar" (default: "line")
 - `format` (string, optional): Image format - "png", "jpg", "svg", or "pdf" (default: "png")
 - `proxy` (boolean, optional): If true, save image to disk and return GUID instead of base64 (default: false)
+- `alias` (string, optional): Human-friendly name for the image (only used with proxy=true). Must be 3-64 characters, alphanumeric with hyphens/underscores. Example: "q4-sales-chart"
+- `token` (string, required): JWT authentication token
 
 **Axis Control Parameters (optional):**
 - `xmin` (number, optional): Minimum value for X-axis
@@ -81,14 +83,27 @@ When `proxy=true`, the image is saved to disk with a unique GUID filename (e.g.,
 
 ### `get_image`
 
-Retrieves a previously rendered image by its GUID (from proxy mode).
+Retrieves a previously rendered image by its GUID or alias (from proxy mode).
 
 **Parameters:**
-- `guid` (string, required): The GUID of the image to retrieve
+- `identifier` (string, required): The GUID or alias of the image to retrieve
+- `token` (string, required): JWT authentication token
 
 **Returns:**
 - Base64-encoded image data
 - Success confirmation message
+
+### `list_images`
+
+Discovers all stored images accessible to your token's group.
+
+**Parameters:**
+- `token` (string, required): JWT authentication token
+
+**Returns:**
+- List of stored images with GUIDs and aliases
+- Total count of images in your group
+- Usage instructions
 
 ## Example Usage
 
@@ -175,7 +190,8 @@ This example:
     "y": [10, 25, 20, 35, 30],
     "type": "line",
     "format": "png",
-    "proxy": true
+    "proxy": true,
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
   }
 }
 ```
@@ -188,18 +204,83 @@ Format: png
 Use get_image tool with guid='a1b2c3d4-e5f6-7890-1234-567890abcdef' to retrieve the image.
 ```
 
-### Retrieving Proxy Mode Images
+### Proxy Mode with Alias
 
 ```json
 {
-  "tool": "get_image",
+  "tool": "render_graph",
   "arguments": {
-    "guid": "a1b2c3d4-e5f6-7890-1234-567890abcdef"
+    "title": "Q4 Sales Report",
+    "x": [1, 2, 3, 4, 5],
+    "y": [10, 25, 20, 35, 30],
+    "type": "bar",
+    "proxy": true,
+    "alias": "q4-sales-report",
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
   }
 }
 ```
 
-Returns the base64-encoded image data.
+Returns:
+```
+Image saved with GUID: a1b2c3d4-e5f6-7890-1234-567890abcdef
+Alias: q4-sales-report
+Chart: bar - 'Q4 Sales Report'
+Format: png
+Use get_image with identifier='q4-sales-report' or guid to retrieve.
+```
+
+You can then retrieve the image using either:
+- `get_image` with `identifier: "q4-sales-report"` (alias)
+- `get_image` with `identifier: "a1b2c3d4-e5f6-7890-1234-567890abcdef"` (GUID)
+
+### Retrieving Proxy Mode Images
+
+Using GUID:
+```json
+{
+  "tool": "get_image",
+  "arguments": {
+    "identifier": "a1b2c3d4-e5f6-7890-1234-567890abcdef",
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  }
+}
+```
+
+Using Alias:
+```json
+{
+  "tool": "get_image",
+  "arguments": {
+    "identifier": "q4-sales-report",
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  }
+}
+```
+
+Both return the base64-encoded image data.
+
+### Listing Your Images
+
+```json
+{
+  "tool": "list_images",
+  "arguments": {
+    "token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
+  }
+}
+```
+
+Returns:
+```
+Stored Images in group 'your-group' (3 total):
+
+• a1b2c3d4-e5f6-7890-1234-567890abcdef (alias: q4-sales-report)
+• b2c3d4e5-f6a7-8901-2345-678901bcdef0
+• c3d4e5f6-a7b8-9012-3456-789012cdef01 (alias: monthly-chart)
+
+Use get_image with a GUID or alias to retrieve an image.
+```
 
 ## Web Server Endpoints
 
@@ -210,15 +291,20 @@ The REST API (port 8000) provides additional ways to access rendered images:
 - Body: GraphParams JSON (same parameters as `render_graph` tool)
 - Returns: Base64 JSON or raw image bytes
 
-### Get Image by GUID
-**GET** `/proxy/{guid}`
+### Get Image by GUID or Alias
+**GET** `/proxy/{identifier}`
+- `identifier`: Either a GUID or registered alias
 - Returns: Raw image bytes with appropriate Content-Type
-- Example: `http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef`
+- Examples:
+  - `http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef`
+  - `http://localhost:8000/proxy/q4-sales-report`
 
 ### View Image in Browser
-**GET** `/proxy/{guid}/html`
+**GET** `/proxy/{identifier}/html`
 - Returns: HTML page with embedded image
-- Example: `http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef/html`
+- Examples:
+  - `http://localhost:8000/proxy/a1b2c3d4-e5f6-7890-1234-567890abcdef/html`
+  - `http://localhost:8000/proxy/q4-sales-report/html`
 - Useful for viewing images directly in a web browser
 
 ### Health Check
@@ -306,5 +392,6 @@ See [N8N MCP Integration Guide](./README_N8N_MCP.md) for detailed N8N integratio
 - **[Multi-Dataset Support](./MULTI_DATASET.md)**: Plot up to 5 datasets on a single graph with examples
 - **[Axis Controls Guide](./AXIS_CONTROLS.md)**: Detailed documentation on axis limits and tick controls with examples
 - **[Proxy Mode Guide](./PROXY_MODE.md)**: In-depth guide on using proxy mode for persistent image storage
+- **[Image Aliases](./ALIAS.md)**: Human-friendly names for stored images
 - **[Authentication Guide](./AUTHENTICATION.md)**: JWT authentication setup and configuration
 - **[Themes Guide](./THEMES.md)**: Available themes and customization options

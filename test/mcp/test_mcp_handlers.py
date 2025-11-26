@@ -3,6 +3,7 @@
 import pytest
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
+from conftest import MCP_URL
 
 # Note: logger fixture is now defined in conftest.py
 
@@ -10,7 +11,7 @@ from mcp.client.streamable_http import streamablehttp_client
 @pytest.mark.asyncio
 async def test_list_handlers_tool_exists():
     """Test that list_handlers tool is available in MCP server"""
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -27,7 +28,7 @@ async def test_list_handlers_tool_no_parameters(logger):
     """Test that list_handlers tool requires no parameters"""
     logger.info("Testing list_handlers tool")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -48,7 +49,7 @@ async def test_list_handlers_returns_all_handlers(logger):
     """Test that list_handlers returns all expected graph types"""
     logger.info("Testing list_handlers returns all handlers")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -70,7 +71,7 @@ async def test_list_handlers_includes_descriptions(logger):
     """Test that list_handlers includes descriptions for each graph type"""
     logger.info("Testing list_handlers includes descriptions")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 
@@ -97,7 +98,7 @@ async def test_list_handlers_formatted_correctly(logger):
     """Test that list_handlers output is properly formatted"""
     logger.info("Testing list_handlers formatting")
 
-    async with streamablehttp_client("http://localhost:8001/mcp/") as (read, write, _):
+    async with streamablehttp_client(MCP_URL) as (read, write, _):
         async with ClientSession(read, write) as session:
             await session.initialize()
 

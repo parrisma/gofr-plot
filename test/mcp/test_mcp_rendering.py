@@ -14,9 +14,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
 import logging
-
-
-MCP_URL = "http://localhost:8001/mcp/"
+from conftest import MCP_URL
 
 
 @pytest.mark.asyncio

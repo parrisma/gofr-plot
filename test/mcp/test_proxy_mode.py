@@ -20,9 +20,7 @@ from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
 import logging
-
-
-MCP_URL = "http://localhost:8001/mcp/"
+from conftest import MCP_URL
 
 
 @pytest.mark.asyncio
@@ -31,7 +29,7 @@ async def test_render_with_proxy_mode_returns_guid(test_jwt_token):
     logger = ConsoleLogger(name="proxy_test", level=logging.INFO)
     logger.info("Starting proxy mode tests")
 
-    http_url = "http://localhost:8001/mcp/"
+    http_url = MCP_URL
 
     async with streamablehttp_client(http_url) as (read, write, _):
         async with ClientSession(read, write) as session:
@@ -69,7 +67,7 @@ async def test_render_with_proxy_mode_returns_guid(test_jwt_token):
 
             # Test 2: Retrieve image using get_image tool
             logger.info("Test 2: Retrieving image by GUID")
-            get_args = {"guid": guid, "token": test_jwt_token}
+            get_args = {"identifier": guid, "token": test_jwt_token}
 
             result = await session.call_tool("get_image", get_args)
 
@@ -90,7 +88,7 @@ async def test_render_with_proxy_mode_returns_guid(test_jwt_token):
             # Test 3: Try to retrieve non-existent GUID
             logger.info("Test 3: Testing invalid GUID handling")
             invalid_guid = "00000000-0000-0000-0000-000000000000"
-            get_args = {"guid": invalid_guid, "token": test_jwt_token}
+            get_args = {"identifier": invalid_guid, "token": test_jwt_token}
 
             result = await session.call_tool("get_image", get_args)
 
