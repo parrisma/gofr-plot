@@ -9,12 +9,12 @@ WEB_PORT=${1:-8000}
 MCP_PORT=${2:-8001}
 
 # Create docker network if it doesn't exist
-echo "Checking for ai-net network..."
-if ! docker network inspect ai-net >/dev/null 2>&1; then
-    echo "Creating ai-net network..."
-    docker network create ai-net
+echo "Checking for gofr-net network..."
+if ! docker network inspect gofr-net >/dev/null 2>&1; then
+    echo "Creating gofr-net network..."
+    docker network create gofr-net
 else
-    echo "Network ai-net already exists"
+    echo "Network gofr-net already exists"
 fi
 
 # Create docker volume for persistent data if it doesn't exist
@@ -43,7 +43,7 @@ echo "Web port: $WEB_PORT, MCP port: $MCP_PORT"
 
 docker run -d \
 --name gofr-plot_dev \
---network ai-net \
+--network gofr-net \
 --user $(id -u):$(id -g) \
 -v "$HOME/devroot/gofr-plot":/home/gofr-plot/devroot/gofr-plot \
 -v "$HOME/.ssh:/home/gofr-plot/.ssh:ro" \
