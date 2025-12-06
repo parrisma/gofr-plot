@@ -1,20 +1,50 @@
 #!/bin/sh
 
-# Usage: ./run-prod.sh [WEB_PORT] [MCP_PORT]
-# Defaults: WEB_PORT=8000, MCP_PORT=8001
-# Example: ./run-prod.sh 9000 9001
+# Usage: ./run-prod.sh [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]
+# Defaults: NETWORK=gofr-net, WEB_PORT=8000, MCP_PORT=8001
+# Example: ./run-prod.sh -n my-network -w 9000 -m 9001
+
+# Default values (can be overridden by env vars or command line)
+DOCKER_NETWORK="${GOFR_PLOT_NETWORK:-gofr-net}"
+WEB_PORT=8000
+MCP_PORT=8001
 
 # Parse command line arguments
-WEB_PORT=${1:-8000}
-MCP_PORT=${2:-8001}
+while getopts "n:w:m:h" opt; do
+    case $opt in
+        n)
+            DOCKER_NETWORK=$OPTARG
+            ;;
+        w)
+            WEB_PORT=$OPTARG
+            ;;
+        m)
+            MCP_PORT=$OPTARG
+            ;;
+        h)
+            echo "Usage: $0 [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]"
+            echo "  -n NETWORK   Docker network to attach to (default: gofr-net)"
+            echo "  -w WEB_PORT  Port to expose web server on (default: 8000)"
+            echo "  -m MCP_PORT  Port to expose MCP server on (default: 8001)"
+            echo ""
+            echo "Environment Variables:"
+            echo "  GOFR_PLOT_NETWORK  Default network (default: gofr-net)"
+            exit 0
+            ;;
+        \?)
+            echo "Usage: $0 [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]"
+            exit 1
+            ;;
+    esac
+done
 
 # Create docker network if it doesn't exist
-echo "Checking for gofr-net network..."
-if ! docker network inspect gofr-net >/dev/null 2>&1; then
-    echo "Creating gofr-net network..."
-    docker network create gofr-net
+echo "Checking for ${DOCKER_NETWORK} network..."
+if ! docker network inspect ${DOCKER_NETWORK} >/dev/null 2>&1; then
+    echo "Creating ${DOCKER_NETWORK} network..."
+    docker network create ${DOCKER_NETWORK}
 else
-    echo "Network gofr-net already exists"
+    echo "Network ${DOCKER_NETWORK} already exists"
 fi
 
 # Create docker volume for persistent data if it doesn't exist
@@ -36,12 +66,13 @@ echo "Removing existing gofr-plot_prod container..."
 docker rm gofr-plot_prod 2>/dev/null || true
 
 echo "Starting new gofr-plot_prod container..."
+echo "Network: $DOCKER_NETWORK"
 echo "Mounting gofr-plot_data volume to /home/gofr-plot/data in container"
 echo "Web port: $WEB_PORT, MCP port: $MCP_PORT"
 
 docker run -d \
 --name gofr-plot_prod \
---network gofr-net \
+--network ${DOCKER_NETWORK} \
 -v gofr-plot_data:/home/gofr-plot/data \
 -p $WEB_PORT:8000 \
 -p $MCP_PORT:8001 \

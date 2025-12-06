@@ -23,7 +23,9 @@ if [ -f "${PROJECT_ROOT}/gofr-plot.env" ]; then
 fi
 
 # Configuration with environment variable fallbacks
+MCPO_HOST="${GOFR_PLOT_MCPO_HOST:-${GOFR_PLOT_HOST:-0.0.0.0}}"
 MCPO_PORT="${GOFR_PLOT_MCPO_PORT:-8011}"
+MCP_HOST="${GOFR_PLOT_MCP_HOST:-${GOFR_PLOT_HOST:-0.0.0.0}}"
 MCP_PORT="${GOFR_PLOT_MCP_PORT:-8010}"
 MCP_URL="http://localhost:${MCP_PORT}/mcp"
 MCPO_API_KEY="${GOFR_PLOT_MCPO_API_KEY:-}"
@@ -31,6 +33,10 @@ MCPO_API_KEY="${GOFR_PLOT_MCPO_API_KEY:-}"
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --host)
+            MCPO_HOST="$2"
+            shift 2
+            ;;
         --port)
             MCPO_PORT="$2"
             shift 2
@@ -50,12 +56,14 @@ while [[ $# -gt 0 ]]; do
             echo "Starts MCPO wrapper to expose MCP server as OpenAPI/REST endpoints."
             echo ""
             echo "Options:"
+            echo "  --host HOST           Host for MCPO to bind to (default: 0.0.0.0)"
             echo "  --port PORT           Port for MCPO to listen on (default: 8011)"
             echo "  --mcp-port PORT       Port where MCP server is running (default: 8010)"
             echo "  --api-key KEY         MCPO API key (optional, for additional auth layer)"
             echo "  -h, --help            Show this help message"
             echo ""
             echo "Environment Variables:"
+            echo "  GOFR_PLOT_MCPO_HOST       Default MCPO host (default: 0.0.0.0)"
             echo "  GOFR_PLOT_MCPO_PORT       Default MCPO port (default: 8011)"
             echo "  GOFR_PLOT_MCP_PORT        Default MCP port (default: 8010)"
             echo "  GOFR_PLOT_MCPO_API_KEY    MCPO API key (optional)"
@@ -80,6 +88,7 @@ done
 
 # Display startup information
 echo -e "${BLUE}=== Starting gofr-plot MCPO Wrapper ===${NC}"
+echo "MCPO Host: ${MCPO_HOST}"
 echo "MCPO Port: ${MCPO_PORT}"
 echo "MCP Server: ${MCP_URL}"
 
@@ -125,7 +134,7 @@ for i in {1..30}; do
 done
 
 # Build MCPO command
-CMD="uv tool run mcpo --port ${MCPO_PORT} --server-type streamable-http"
+CMD="uv tool run mcpo --host ${MCPO_HOST} --port ${MCPO_PORT} --server-type streamable-http"
 
 # Add API key only if provided (omit entirely for no-auth/JWT-passthrough mode)
 if [[ -n "${MCPO_API_KEY}" ]]; then

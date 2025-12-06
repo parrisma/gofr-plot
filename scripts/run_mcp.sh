@@ -21,6 +21,7 @@ if [ -f "${PROJECT_ROOT}/gofr-plot.env" ]; then
 fi
 
 # Configuration with environment variable fallbacks
+HOST="${GOFR_PLOT_MCP_HOST:-${GOFR_PLOT_HOST:-0.0.0.0}}"
 PORT="${GOFR_PLOT_MCP_PORT:-8010}"
 JWT_SECRET="${GOFR_PLOT_JWT_SECRET:-}"
 TOKEN_STORE="${GOFR_PLOT_TOKEN_STORE:-${GOFR_PLOT_LOGS}/gofr-plot_tokens.json}"
@@ -30,6 +31,10 @@ WEB_URL="${GOFR_PLOT_WEB_URL:-http://$(hostname):${GOFR_PLOT_WEB_PORT:-8012}}"
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --host)
+            HOST="$2"
+            shift 2
+            ;;
         --port)
             PORT="$2"
             shift 2
@@ -58,6 +63,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
+            echo "  --host HOST           Host to bind to (default: 0.0.0.0)"
             echo "  --port PORT           Port to run MCP server on (default: 8010)"
             echo "  --jwt-secret SECRET   JWT secret for token validation"
             echo "  --token-store PATH    Path to token store JSON file"
@@ -65,6 +71,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help            Show this help message"
             echo ""
             echo "Environment Variables:"
+            echo "  GOFR_PLOT_MCP_HOST        Default host (default: 0.0.0.0)"
             echo "  GOFR_PLOT_MCP_PORT        Default port (default: 8010)"
             echo "  GOFR_PLOT_JWT_SECRET      Default JWT secret"
             echo "  GOFR_PLOT_TOKEN_STORE     Default token store path"
@@ -90,7 +97,7 @@ if [[ "${NO_AUTH}" != "true" ]]; then
 fi
 
 # Build command with DEBUG logging
-CMD="uv run python app/main_mcp.py --host 0.0.0.0 --port ${PORT} --web-url ${WEB_URL} --proxy-url-mode url --log-level DEBUG"
+CMD="uv run python app/main_mcp.py --host ${HOST} --port ${PORT} --web-url ${WEB_URL} --proxy-url-mode url --log-level DEBUG"
 
 if [[ "${NO_AUTH}" == "true" ]]; then
     CMD="${CMD} --no-auth"
@@ -103,8 +110,9 @@ fi
 
 # Display startup information
 echo -e "${GREEN}=== Starting gofr-plot MCP Server ===${NC}"
+echo "Host: ${HOST}"
 echo "Port: ${PORT}"
-echo "URL: http://localhost:${PORT}/mcp/"
+echo "URL: http://${HOST}:${PORT}/mcp/"
 echo ""
 
 # Check if port is already in use

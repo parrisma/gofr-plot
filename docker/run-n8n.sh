@@ -1,15 +1,18 @@
 #!/bin/sh
 
-# Usage: ./run-n8n.sh [-r] [-p PORT]
+# Usage: ./run-n8n.sh [-r] [-p PORT] [-n NETWORK]
 # Options:
-#   -r         Recreate doco_volume (drop and recreate if it exists)
-#   -p PORT    Port to expose n8n on (default: 5678)
-# Example: ./run-n8n.sh -p 9000 -r
+#   -r           Recreate doco_volume (drop and recreate if it exists)
+#   -p PORT      Port to expose n8n on (default: 5678)
+#   -n NETWORK   Docker network to attach to (default: gofr-net)
+# Example: ./run-n8n.sh -p 9000 -r -n my-network
 
-# Parse command line arguments
+# Default values (can be overridden by env vars or command line)
 RECREATE_VOLUME=false
 N8N_PORT=5678
-while getopts "rp:" opt; do
+DOCKER_NETWORK="${GOFR_PLOT_NETWORK:-gofr-net}"
+
+while getopts "rp:n:h" opt; do
     case $opt in
         r)
             RECREATE_VOLUME=true
@@ -17,10 +20,21 @@ while getopts "rp:" opt; do
         p)
             N8N_PORT=$OPTARG
             ;;
+        n)
+            DOCKER_NETWORK=$OPTARG
+            ;;
+        h)
+            echo "Usage: $0 [-r] [-p PORT] [-n NETWORK]"
+            echo "  -r           Recreate doco_volume (drop and recreate if it exists)"
+            echo "  -p PORT      Port to expose n8n on (default: 5678)"
+            echo "  -n NETWORK   Docker network to attach to (default: gofr-net)"
+            echo ""
+            echo "Environment Variables:"
+            echo "  GOFR_PLOT_NETWORK  Default network (default: gofr-net)"
+            exit 0
+            ;;
         \?)
-            echo "Usage: $0 [-r] [-p PORT]"
-            echo "  -r         Recreate doco_volume (drop and recreate if it exists)"
-            echo "  -p PORT    Port to expose n8n on (default: 5678)"
+            echo "Usage: $0 [-r] [-p PORT] [-n NETWORK]"
             exit 1
             ;;
     esac
@@ -41,12 +55,12 @@ else
 fi
 
 # Create docker network if it doesn't exist
-echo "Checking for gofr-net network..."
-if ! docker network inspect gofr-net >/dev/null 2>&1; then
-    echo "Creating gofr-net network..."
-    docker network create gofr-net
+echo "Checking for ${DOCKER_NETWORK} network..."
+if ! docker network inspect ${DOCKER_NETWORK} >/dev/null 2>&1; then
+    echo "Creating ${DOCKER_NETWORK} network..."
+    docker network create ${DOCKER_NETWORK}
 else
-    echo "Network gofr-net already exists"
+    echo "Network ${DOCKER_NETWORK} already exists"
 fi
 
 # Handle doco_volume creation/recreation
@@ -81,10 +95,11 @@ echo "Removing existing n8n container..."
 docker rm n8n 2>/dev/null || true
 
 echo "Starting n8n container..."
+echo "Network: $DOCKER_NETWORK"
 echo "Port: $N8N_PORT"
 docker run -d \
   --name n8n \
-    --network gofr-net \
+  --network ${DOCKER_NETWORK} \
   -p $N8N_PORT:5678 \
   -e GENERIC_TIMEZONE="$TIMEZONE" \
   -e TZ="$TIMEZONE" \
@@ -104,7 +119,7 @@ if docker ps -q -f name=n8n | grep -q .; then
     echo "Access from Host Machine:"
     echo "  n8n Web UI:    http://localhost:$N8N_PORT"
     echo ""
-    echo "Access from gofr-net (other containers):"
+    echo "Access from ${DOCKER_NETWORK} (other containers):"
     echo "  n8n API:       http://n8n:5678"
     echo ""
     echo "Data & Storage:"
@@ -114,7 +129,7 @@ if docker ps -q -f name=n8n | grep -q .; then
     echo "Management:"
     echo "  View logs:     docker logs -f n8n"
     echo "  Stop:          docker stop n8n"
-    echo "  Recreate:      ./docker/run-n8n.sh -r -p $N8N_PORT"
+    echo "  Recreate:      ./docker/run-n8n.sh -r -p $N8N_PORT -n $DOCKER_NETWORK"
     echo "==================================================================="
     echo ""
 else

@@ -21,6 +21,7 @@ if [ -f "${PROJECT_ROOT}/gofr-plot.env" ]; then
 fi
 
 # Configuration with environment variable fallbacks
+HOST="${GOFR_PLOT_WEB_HOST:-${GOFR_PLOT_HOST:-0.0.0.0}}"
 PORT="${GOFR_PLOT_WEB_PORT:-8012}"
 JWT_SECRET="${GOFR_PLOT_JWT_SECRET:-}"
 TOKEN_STORE="${GOFR_PLOT_TOKEN_STORE:-${GOFR_PLOT_LOGS}/gofr-plot_tokens.json}"
@@ -29,6 +30,10 @@ NO_AUTH="${GOFR_PLOT_NO_AUTH:-true}"
 # Parse command-line arguments
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --host)
+            HOST="$2"
+            shift 2
+            ;;
         --port)
             PORT="$2"
             shift 2
@@ -49,6 +54,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [OPTIONS]"
             echo ""
             echo "Options:"
+            echo "  --host HOST           Host to bind to (default: 0.0.0.0)"
             echo "  --port PORT           Port to run web server on (default: 8012)"
             echo "  --jwt-secret SECRET   JWT secret for token validation"
             echo "  --token-store PATH    Path to token store JSON file"
@@ -56,6 +62,7 @@ while [[ $# -gt 0 ]]; do
             echo "  -h, --help            Show this help message"
             echo ""
             echo "Environment Variables:"
+            echo "  GOFR_PLOT_WEB_HOST        Default host (default: 0.0.0.0)"
             echo "  GOFR_PLOT_WEB_PORT        Default port (default: 8012)"
             echo "  GOFR_PLOT_JWT_SECRET      Default JWT secret"
             echo "  GOFR_PLOT_TOKEN_STORE     Default token store path"
@@ -81,7 +88,7 @@ if [[ "${NO_AUTH}" != "true" ]]; then
 fi
 
 # Build command with DEBUG logging
-CMD="uv run python app/main_web.py --host 0.0.0.0 --port ${PORT} --log-level DEBUG"
+CMD="uv run python app/main_web.py --host ${HOST} --port ${PORT} --log-level DEBUG"
 
 if [[ "${NO_AUTH}" == "true" ]]; then
     CMD="${CMD} --no-auth"
@@ -94,8 +101,9 @@ fi
 
 # Display startup information
 echo -e "${GREEN}=== Starting gofr-plot Web Server ===${NC}"
+echo "Host: ${HOST}"
 echo "Port: ${PORT}"
-echo "URL: http://localhost:${PORT}"
+echo "URL: http://${HOST}:${PORT}"
 echo ""
 
 # Check if port is already in use
