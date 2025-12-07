@@ -1,8 +1,1 @@
-{
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJncm91cCI6InNlY3VyZSIsImlhdCI6MTc2NTExNzI1NCwiZXhwIjoxNzY1MTE3MzQ0LCJuYmYiOjE3NjUxMTcyNTQsImF1ZCI6ImdvZnItYXBpIn0.inPXpDLRqQkuNnjWEFW7LLDMZpFmTfEtYUn8WRwDRaE": {
-    "group": "secure",
-    "issued_at": "2025-12-07T14:20:54.657083",
-    "expires_at": "2025-12-07T14:22:24.657083",
-    "not_before": "2025-12-07T14:20:54.657083"
-  }
-}
+{}
