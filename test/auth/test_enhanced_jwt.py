@@ -7,8 +7,7 @@ and backward compatibility with tokens that don't have enhanced features.
 import pytest
 import jwt
 from datetime import datetime, timedelta
-from app.auth.service import AuthService
-from app.auth.middleware import _generate_fingerprint
+from app.auth import AuthService, _generate_fingerprint
 import hashlib
 
 
@@ -34,7 +33,7 @@ def test_create_token_with_enhanced_claims(auth_service):
     assert "iat" in payload  # Issued at
     assert "exp" in payload  # Expires at
     assert "nbf" in payload  # Not before
-    assert payload["aud"] == "gofr-plot-api"  # Audience
+    assert payload["aud"] == "gofr-api"  # Audience (gofr-common default)
     assert payload["jti"] == "unique-token-id-456"  # JWT ID
     assert payload["fp"] == "test-fingerprint-123"  # Fingerprint
 
@@ -49,7 +48,7 @@ def test_create_token_without_optional_claims(auth_service):
     assert "iat" in payload
     assert "exp" in payload
     assert "nbf" in payload
-    assert payload["aud"] == "gofr-plot-api"
+    assert payload["aud"] == "gofr-api"  # Audience (gofr-common default)
     assert "jti" not in payload  # Optional
     assert "fp" not in payload  # Optional
 

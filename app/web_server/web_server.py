@@ -7,6 +7,7 @@ from app.validation import GraphDataValidator
 from app.storage import get_storage
 from app.storage.exceptions import PermissionDeniedError
 from app.auth import (
+    AuthService,
     TokenInfo,
     verify_token,
     optional_verify_token,
@@ -14,7 +15,6 @@ from app.auth import (
     get_auth_service,
     set_security_auditor,
 )
-from app.auth.service import AuthService
 from app.security import RateLimiter, RateLimitExceeded, SecurityAuditor
 from app.logger import ConsoleLogger
 import logging

@@ -81,7 +81,8 @@ if __name__ == "__main__":
         )
 
         # Build settings from environment and CLI args
-        settings = Settings.from_env(require_auth=require_auth)
+        # Use require_auth=False initially to avoid validation failure before we apply CLI args
+        settings = Settings.from_env(require_auth=False)
 
         # Override with CLI arguments if provided
         if args.host:

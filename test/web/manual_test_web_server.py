@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from httpx import AsyncClient, ASGITransport
 from app.logger import ConsoleLogger
 from app.web_server.web_server import GraphWebServer
-from app.auth.service import AuthService
+from app.auth import AuthService
 
 
 async def test_web_server():

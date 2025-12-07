@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Optional, Tuple
 
 from gofr_common.auth.config import resolve_auth_config as _resolve_auth_config
-from gofr_common.logger import Logger
 
 from app.config import Config
 

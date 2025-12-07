@@ -3,7 +3,7 @@ import argparse
 import sys
 from app.settings import Settings
 from app.web_server.web_server import GraphWebServer
-from app.auth.service import AuthService
+from app.auth import AuthService
 from app.startup import resolve_auth_config
 from app.logger import ConsoleLogger
 import logging
@@ -64,7 +64,8 @@ if __name__ == "__main__":
         )
 
         # Build settings from environment and CLI args
-        settings = Settings.from_env(require_auth=require_auth)
+        # Use require_auth=False initially to avoid validation failure before we apply CLI args
+        settings = Settings.from_env(require_auth=False)
 
         # Override with CLI arguments if provided
         if args.host:

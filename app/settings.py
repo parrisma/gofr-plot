@@ -12,7 +12,6 @@ Design principles:
 """
 
 from pathlib import Path
-from typing import Optional
 
 from gofr_common.config import (
     ServerSettings,

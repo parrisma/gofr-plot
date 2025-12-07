@@ -15,6 +15,7 @@ from gofr_common.auth import (
     set_security_auditor,
     get_security_auditor,
 )
+from gofr_common.auth.middleware import _generate_fingerprint
 
 __all__ = [
     "AuthService",
@@ -25,4 +26,5 @@ __all__ = [
     "init_auth_service",
     "set_security_auditor",
     "get_security_auditor",
+    "_generate_fingerprint",
 ]

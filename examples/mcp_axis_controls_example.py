@@ -10,7 +10,7 @@ import asyncio
 import logging
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
-from app.auth.service import AuthService
+from app.auth import AuthService
 from app.logger import ConsoleLogger
 
 

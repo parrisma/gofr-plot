@@ -2,8 +2,8 @@
     "name": "gofr-plot Development Container",
     "dockerFile": "../docker/Dockerfile.dev",
     "context": "..",
-    "workspaceFolder": "/home/gofr-plot/devroot/gofr-plot",
-    "remoteUser": "gofr-plot",
+    "workspaceFolder": "/home/gofr/devroot/gofr-plot",
+    "remoteUser": "gofr",
     "customizations": {
         "vscode": {
             "extensions": [
@@ -19,12 +19,12 @@
                 "njpwerner.autodocstring"
             ],
             "settings": {
-                "python.defaultInterpreterPath": "/home/gofr-plot/.venv/bin/python",
+                "python.defaultInterpreterPath": "/home/gofr/devroot/gofr-plot/.venv/bin/python",
                 "python.terminal.activateEnvironment": true
             }
         }
     },
     "mounts": [
-        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/gofr-plot/.ssh,type=bind,consistency=cached"
+        "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/home/gofr/.ssh,type=bind,consistency=cached"
     ]
 }

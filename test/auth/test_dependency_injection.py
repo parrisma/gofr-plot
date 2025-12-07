@@ -1,8 +1,7 @@
 """Tests for dependency injection pattern in auth system"""
 
 from unittest.mock import MagicMock
-from app.auth.service import AuthService
-from app.auth.middleware import init_auth_service, get_auth_service
+from app.auth import AuthService, init_auth_service, get_auth_service
 
 
 class TestAuthServiceDependencyInjection:
@@ -200,7 +199,7 @@ class TestDependencyInjectionDocumentation:
 
     def test_init_auth_service_has_auth_service_parameter(self):
         """Test init_auth_service has auth_service parameter in signature"""
-        from app.auth.middleware import init_auth_service
+        from app.auth import init_auth_service
         import inspect
 
         sig = inspect.signature(init_auth_service)
@@ -208,7 +207,7 @@ class TestDependencyInjectionDocumentation:
 
     def test_init_auth_service_has_docstring(self):
         """Test init_auth_service documents dependency injection"""
-        from app.auth.middleware import init_auth_service
+        from app.auth import init_auth_service
 
         docstring = init_auth_service.__doc__
         assert docstring is not None

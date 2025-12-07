@@ -31,7 +31,7 @@ def test_server_settings_from_env(monkeypatch):
     monkeypatch.setenv("GOFR_PLOT_MCP_PORT", "9001")
     monkeypatch.setenv("GOFR_PLOT_WEB_PORT", "9000")
 
-    settings = ServerSettings.from_env()
+    settings = ServerSettings.from_env(prefix="GOFR_PLOT")
     assert settings.host == "127.0.0.1"
     assert settings.mcp_port == 9001
     assert settings.web_port == 9000
@@ -63,7 +63,7 @@ def test_storage_settings_from_env(monkeypatch, tmp_path):
     test_data_dir = tmp_path / "test_data"
     monkeypatch.setenv("GOFR_PLOT_DATA_DIR", str(test_data_dir))
 
-    settings = StorageSettings.from_env()
+    settings = StorageSettings.from_env(prefix="GOFR_PLOT")
     assert settings.data_dir == test_data_dir
     assert settings.storage_dir == test_data_dir / "storage"
     assert settings.auth_dir == test_data_dir / "auth"
@@ -95,7 +95,7 @@ def test_settings_from_env_with_auth(monkeypatch):
     monkeypatch.setenv("GOFR_PLOT_JWT_SECRET", "test-secret-key")
     monkeypatch.setenv("GOFR_PLOT_MCP_PORT", "9001")
 
-    settings = Settings.from_env(require_auth=True)
+    settings = Settings.from_env(prefix="GOFR_PLOT", require_auth=True)
     assert settings.auth.jwt_secret == "test-secret-key"
     assert settings.server.mcp_port == 9001
 
@@ -105,7 +105,7 @@ def test_settings_from_env_without_auth(monkeypatch):
     # No JWT secret set
     monkeypatch.delenv("GOFR_PLOT_JWT_SECRET", raising=False)
 
-    settings = Settings.from_env(require_auth=False)
+    settings = Settings.from_env(prefix="GOFR_PLOT", require_auth=False)
     assert settings.auth.require_auth is False
 
 
@@ -116,7 +116,7 @@ def test_settings_resolve_defaults(tmp_path, monkeypatch):
     # Clear token store env var to test default resolution
     monkeypatch.delenv("GOFR_PLOT_TOKEN_STORE", raising=False)
 
-    settings = Settings.from_env(require_auth=True)
+    settings = Settings.from_env(prefix="GOFR_PLOT", require_auth=True)
     assert settings.auth.token_store_path is None  # Not set yet
 
     settings.resolve_defaults()
@@ -159,7 +159,7 @@ def test_log_settings_from_env(monkeypatch):
     monkeypatch.setenv("GOFR_PLOT_LOG_LEVEL", "DEBUG")
     monkeypatch.setenv("GOFR_PLOT_LOG_FORMAT", "json")
 
-    settings = LogSettings.from_env()
+    settings = LogSettings.from_env(prefix="GOFR_PLOT")
     assert settings.level == "DEBUG"
     assert settings.format == "json"
 

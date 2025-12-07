@@ -16,7 +16,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 from mcp import ClientSession
 from mcp.client.streamable_http import streamablehttp_client
 from app.logger import ConsoleLogger
-from app.auth.service import AuthService
+from app.auth import AuthService
 
 
 async def test_mcp_server():
