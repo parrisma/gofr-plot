@@ -240,13 +240,27 @@ class TestMCPOProxyMode:
         assert response1.status_code == 200
         data1 = response1.json()
 
-        # Extract GUID from response (format varies)
+        # Extract GUID from response (format: "Image saved with GUID: xxx-xxx...")
+        import re
+
+        guid = None
         if isinstance(data1, str):
-            guid = data1
+            # Look for GUID pattern in the text
+            match = re.search(r"GUID: ([a-f0-9-]{36})", data1)
+            if match:
+                guid = match.group(1)
+            else:
+                guid = data1  # Fallback: maybe it's just the GUID
         elif isinstance(data1, list) and len(data1) > 0:
-            guid = data1[0] if "guid" in str(data1[0]).lower() else data1[0]
-        else:
-            pytest.skip("Proxy mode returned unexpected format")
+            text = str(data1[0])
+            match = re.search(r"GUID: ([a-f0-9-]{36})", text)
+            if match:
+                guid = match.group(1)
+            else:
+                guid = data1[0]
+
+        if not guid:
+            pytest.skip("Could not extract GUID from proxy response")
             return
 
         # Now retrieve it

@@ -29,23 +29,32 @@ def format_error(
     suggestions: Optional[List[str]] = None,
     context: Optional[Dict[str, Any]] = None,
 ) -> ToolResponse:
-    """Create error response with suggestions list.
+    """Create error response in human-readable plain text format.
 
     Args:
-        error_code: Error type/code (e.g., "Rate Limit Exceeded", "VALIDATION_ERROR")
+        error_code: Error type/code (e.g., "Rate Limit Exceeded", "Validation")
         message: Human-readable error message
-        suggestions: List of actionable suggestions (combined into recovery_strategy)
-        context: Additional context dict (becomes details)
+        suggestions: List of actionable suggestions
+        context: Additional context dict
 
     Returns:
-        JSON error response
+        Plain text error response
     """
-    # Combine suggestions into recovery strategy
-    recovery = None
-    if suggestions:
-        recovery = " ".join(suggestions)
+    lines = [f"Error ({error_code}): {message}"]
 
-    return _builder.error(error_code, message, context, recovery)
+    if context:
+        lines.append("")
+        lines.append("Context:")
+        for key, value in context.items():
+            lines.append(f"  {key}: {value}")
+
+    if suggestions:
+        lines.append("")
+        lines.append("Suggestions:")
+        for suggestion in suggestions:
+            lines.append(f"• {suggestion}")
+
+    return [TextContent(type="text", text="\n".join(lines))]
 
 
 def format_success_image(
@@ -81,42 +90,52 @@ def format_success_image(
 
 
 def format_list(title: str, items: Dict[str, str]) -> ToolResponse:
-    """Format a list of items as JSON.
+    """Format a list of items with descriptions as plain text.
 
     Args:
         title: Title for the list
         items: Dict mapping item names to descriptions
 
     Returns:
-        JSON response with the list
+        List containing a single TextContent with formatted list
     """
-    return success_response({"title": title, "items": items})
+    from mcp.types import TextContent
+
+    lines = [f"{title}:\n"]
+    for name, description in sorted(items.items()):
+        lines.append(f"• {name}: {description}")
+    return [TextContent(type="text", text="\n".join(lines))]
 
 
 # Pre-built error responses
-AUTH_REQUIRED_ERROR = error_response(
-    error_code="AUTH_REQUIRED",
+AUTH_REQUIRED_ERROR = format_error(
+    error_code="Authentication Required",
     message="Authentication required but no token provided",
-    recovery_strategy="Include a valid JWT token in the 'token' parameter",
+    suggestions=["Include a valid JWT token in the 'token' parameter"],
 )
 
 
 def AUTH_INVALID_ERROR(error_msg: str) -> ToolResponse:
     """Create auth invalid error response."""
-    return error_response(
-        error_code="AUTH_INVALID",
+    return format_error(
+        error_code="Authentication Invalid",
         message=f"Token validation failed: {error_msg}",
-        recovery_strategy="Verify token hasn't expired and signature is valid. Generate new token if needed.",
+        suggestions=[
+            "Verify token hasn't expired and signature is valid",
+            "Generate new token if needed",
+        ],
     )
 
 
 def PERMISSION_DENIED_ERROR(resource_id: str, group: str) -> ToolResponse:
     """Create permission denied error response."""
-    return error_response(
-        error_code="PERMISSION_DENIED",
+    return format_error(
+        error_code="Permission Denied",
         message="Access denied to the requested resource",
-        recovery_strategy="Verify you are using the correct authentication token for this resource's group.",
-        details={"resource": resource_id, "your_group": group},
+        suggestions=[
+            "Verify you are using the correct authentication token for this resource's group",
+        ],
+        context={"resource": resource_id, "your_group": group},
     )
 
 

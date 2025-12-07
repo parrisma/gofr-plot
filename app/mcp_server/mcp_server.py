@@ -15,9 +15,6 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 from mcp.server import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
-from starlette.applications import Starlette
-from starlette.middleware.cors import CORSMiddleware
-from starlette.routing import Mount
 from starlette.types import Receive, Scope, Send
 from mcp.types import (
     Tool,
@@ -1264,7 +1261,7 @@ async def handle_streamable_http(scope: Scope, receive: Receive, send: Send) -> 
 
 
 @contextlib.asynccontextmanager
-async def lifespan(app: Starlette) -> AsyncIterator[None]:
+async def lifespan(app) -> AsyncIterator[None]:
     """Context manager for managing session manager lifecycle."""
     logger.info("Initializing StreamableHTTP session manager")
     async with session_manager.run():
@@ -1275,36 +1272,12 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
             logger.info("StreamableHTTP session manager shutting down", status="stopping")
 
 
-# Create Starlette app for Streamable HTTP transport
-# Use trailing slash in mount path to avoid redirects
-starlette_app = Starlette(
-    debug=True,
-    routes=[
-        Mount("/mcp/", app=handle_streamable_http),
-    ],
+from gofr_common.web import create_mcp_starlette_app  # noqa: E402 - must import after MCP setup
+
+starlette_app = create_mcp_starlette_app(
+    mcp_handler=handle_streamable_http,
     lifespan=lifespan,
-)
-
-# Add CORS middleware to expose Mcp-Session-Id header
-# GOFR_PLOT_CORS_ORIGINS: Comma-separated list of allowed origins, or "*" for all
-# Default: http://localhost:3000,http://localhost:8000 (common dev ports)
-cors_origins_str = os.getenv(
-    "GOFR_PLOT_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000"
-)
-if cors_origins_str == "*":
-    cors_origins = ["*"]
-else:
-    cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
-
-logger.info("Configuring CORS", origins=cors_origins)
-
-starlette_app = CORSMiddleware(
-    starlette_app,
-    allow_origins=cors_origins,
-    allow_credentials=True,  # Allow cookies/auth headers
-    allow_methods=["GET", "POST", "DELETE"],  # MCP streamable HTTP methods
-    allow_headers=["*"],  # Allow all headers (including Authorization)
-    expose_headers=["Mcp-Session-Id"],
+    env_prefix="GOFR_PLOT",
 )
 
 
