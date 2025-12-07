@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Depends, Request
 from fastapi.responses import JSONResponse, Response, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from gofr_common.web import CORSConfig
 from app.graph_params import GraphParams
 from app.render import GraphRenderer
 from app.validation import GraphDataValidator
@@ -50,25 +51,12 @@ class GraphWebServer:
         self.storage = get_storage()
         self.require_auth = require_auth
 
-        # Initialize rate limiter with endpoint-specific limits
-        # Use higher limits in test environment to avoid test failures
-        # Configure CORS middleware
-        # GOFR_PLOT_CORS_ORIGINS: Comma-separated list of allowed origins, or "*" for all
-        # Default: http://localhost:3000,http://localhost:8000 (common dev ports)
-        cors_origins_str = os.getenv(
-            "GOFR_PLOT_CORS_ORIGINS", "http://localhost:3000,http://localhost:8000"
-        )
-        if cors_origins_str == "*":
-            cors_origins = ["*"]
-        else:
-            cors_origins = [
-                origin.strip() for origin in cors_origins_str.split(",") if origin.strip()
-            ]
-
+        # Configure CORS middleware using gofr_common.web
+        cors_config = CORSConfig.from_env("GOFR_PLOT")
         self.app.add_middleware(
             CORSMiddleware,
-            allow_origins=cors_origins,
-            allow_credentials=True,  # Allow cookies/auth headers
+            allow_origins=cors_config.allow_origins,
+            allow_credentials=cors_config.allow_credentials,
             allow_methods=["*"],  # Allow all HTTP methods
             allow_headers=["*"],  # Allow all headers (including Authorization)
         )
