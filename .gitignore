@@ -160,4 +160,4 @@ Thumbs.db
 *.tmp
 *.bak
 test/data/
-*Zone.Identifier
+*Zone.Identifier!lib/gofr-common

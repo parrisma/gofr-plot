@@ -1,64 +1,46 @@
-FROM gofr-plot_base:latest
+# GOFR-PLOT Development Image
+# Extends gofr-base:latest with project-specific dev tools
+FROM gofr-base:latest
 
-# Install Git, GitHub CLI, SSH daemon, and debugging tools
+# Switch to root for package installation
+USER root
+
+# Install additional dev tools
 RUN apt-get update && apt-get install -y \
-    git \
     gh \
     openssh-server \
-    # Network debugging tools
-    iputils-ping \
     dnsutils \
     net-tools \
-    iproute2 \
     netcat-openbsd \
-    curl \
-    wget \
-    # Process and system tools
+    telnet \
     lsof \
-    procps \
     htop \
     strace \
     tcpdump \
-    # Text processing
-    jq \
-    less \
     vim \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Set default UID and GID (can be overridden at build time)
-ARG USER_UID=1000
-ARG USER_GID=1000
+# Create project directories
+RUN mkdir -p /home/gofr/devroot/gofr-plot/data \
+    && mkdir -p /home/gofr/devroot/gofr-common \
+    && chown -R gofr:gofr /home/gofr/devroot
 
-# Add Unix group 'gofr-plot' with configurable GID
-RUN groupadd --system --gid ${USER_GID} gofr-plot
-
-# Add user 'gofr-plot' with configurable UID and assign to group 'gofr-plot'
-RUN useradd --system --uid ${USER_UID} --gid ${USER_GID} --home-dir /home/gofr-plot --create-home gofr-plot
-
-# Create project directory and data directory, set ownership to gofr-plot
-RUN mkdir -p /home/gofr-plot/devroot/gofr-plot /home/gofr-plot/devroot/gofr-plot/data && \
-    chown -R gofr-plot:gofr-plot /home/gofr-plot/devroot
-
-# Copy entrypoint script as root before switching users
+# Copy entrypoint
 COPY docker/entrypoint-dev.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Switch to gofr-plot user
-USER gofr-plot
-WORKDIR /home/gofr-plot/devroot/gofr-plot
+WORKDIR /home/gofr/devroot/gofr-plot
 
-# Configure SSH for user gofr-plot only (no exposed port, uses ~/.ssh)
-RUN mkdir -p /home/gofr-plot/.ssh && chmod 700 /home/gofr-plot/.ssh
+# SSH config for git operations
+RUN mkdir -p /home/gofr/.ssh && chmod 700 /home/gofr/.ssh
 
-# Create a UV virtual environment for development in the project directory
-RUN uv venv /home/gofr-plot/devroot/gofr-plot/.venv --python=python3.11
+# Create venv (will be populated by entrypoint)
+RUN uv venv /home/gofr/devroot/gofr-plot/.venv --python=python3.11
 
-# Set environment variables to use the project venv
-ENV VIRTUAL_ENV=/home/gofr-plot/devroot/gofr-plot/.venv
-ENV PATH="/home/gofr-plot/devroot/gofr-plot/.venv/bin:$PATH"
+# Standard GOFR ports (gofr-plot uses 8050-8052)
+EXPOSE 8050 8051 8052
 
-# Use entrypoint to handle initialization
+USER gofr
 ENTRYPOINT ["/entrypoint.sh"]
-
-# Keep container running with infinite wait loop
 CMD ["tail", "-f", "/dev/null"]

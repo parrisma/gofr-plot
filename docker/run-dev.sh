@@ -1,105 +1,109 @@
-#!/bin/sh
+#!/bin/bash
+# Run GOFR-PLOT development container
+# Uses gofr-plot-dev:latest image (built from gofr-base:latest)
+# Standard user: gofr (UID 1000, GID 1000)
 
-# Usage: ./run-dev.sh [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]
-# Defaults: NETWORK=gofr-net, WEB_PORT=8000, MCP_PORT=8001
-# Example: ./run-dev.sh -n my-network -w 9000 -m 9001
+set -e
 
-# Default values (can be overridden by env vars or command line)
-DOCKER_NETWORK="${GOFR_PLOT_NETWORK:-gofr-net}"
-WEB_PORT=8000
-MCP_PORT=8001
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# gofr-common is now a git submodule at lib/gofr-common, no separate mount needed
+
+# Standard GOFR user - all projects use same user
+GOFR_USER="gofr"
+GOFR_UID=1000
+GOFR_GID=1000
+
+# Container and image names
+CONTAINER_NAME="gofr-plot-dev"
+IMAGE_NAME="gofr-plot-dev:latest"
+
+# Defaults from environment or hardcoded (gofr-plot uses 8050-8052)
+MCP_PORT="${GOFRPLOT_MCP_PORT:-8050}"
+MCPO_PORT="${GOFRPLOT_MCPO_PORT:-8051}"
+WEB_PORT="${GOFRPLOT_WEB_PORT:-8052}"
+DOCKER_NETWORK="${GOFRPLOT_DOCKER_NETWORK:-gofr-net}"
 
 # Parse command line arguments
-while getopts "n:w:m:h" opt; do
-    case $opt in
-        n)
-            DOCKER_NETWORK=$OPTARG
+while [ $# -gt 0 ]; do
+    case $1 in
+        --mcp-port)
+            MCP_PORT="$2"
+            shift 2
             ;;
-        w)
-            WEB_PORT=$OPTARG
+        --mcpo-port)
+            MCPO_PORT="$2"
+            shift 2
             ;;
-        m)
-            MCP_PORT=$OPTARG
+        --web-port)
+            WEB_PORT="$2"
+            shift 2
             ;;
-        h)
-            echo "Usage: $0 [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]"
-            echo "  -n NETWORK   Docker network to attach to (default: gofr-net)"
-            echo "  -w WEB_PORT  Port to expose web server on (default: 8000)"
-            echo "  -m MCP_PORT  Port to expose MCP server on (default: 8001)"
-            echo ""
-            echo "Environment Variables:"
-            echo "  GOFR_PLOT_NETWORK  Default network (default: gofr-net)"
-            exit 0
+        --network)
+            DOCKER_NETWORK="$2"
+            shift 2
             ;;
-        \?)
-            echo "Usage: $0 [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]"
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: $0 [--mcp-port PORT] [--mcpo-port PORT] [--web-port PORT] [--network NAME]"
             exit 1
             ;;
     esac
 done
 
-# Create docker network if it doesn't exist
-echo "Checking for ${DOCKER_NETWORK} network..."
-if ! docker network inspect ${DOCKER_NETWORK} >/dev/null 2>&1; then
-    echo "Creating ${DOCKER_NETWORK} network..."
-    docker network create ${DOCKER_NETWORK}
-else
-    echo "Network ${DOCKER_NETWORK} already exists"
-fi
-
-# Create docker volume for persistent data if it doesn't exist
-echo "Checking for gofr-plot_data_dev volume..."
-if ! docker volume inspect gofr-plot_data_dev >/dev/null 2>&1; then
-    echo "Creating gofr-plot_data_dev volume..."
-    docker volume create gofr-plot_data_dev
-    VOLUME_CREATED=true
-else
-    echo "Volume gofr-plot_data_dev already exists"
-    VOLUME_CREATED=false
-fi
-
-# Stop and remove existing container if it exists
-echo "Stopping existing gofr-plot_dev container..."
-docker stop gofr-plot_dev 2>/dev/null || true
-
-echo "Removing existing gofr-plot_dev container..."
-docker rm gofr-plot_dev 2>/dev/null || true
-
-echo "Starting new gofr-plot_dev container..."
+echo "======================================================================="
+echo "Starting GOFR-PLOT Development Container"
+echo "======================================================================="
+echo "User: ${GOFR_USER} (UID=${GOFR_UID}, GID=${GOFR_GID})"
+echo "Ports: MCP=$MCP_PORT, MCPO=$MCPO_PORT, Web=$WEB_PORT"
 echo "Network: $DOCKER_NETWORK"
-echo "Mounting $HOME/devroot/gofr-plot to /home/gofr-plot/devroot/gofr-plot in container"
-echo "Mounting $HOME/.ssh to /home/gofr-plot/.ssh (read-only) in container"
-echo "Mounting gofr-plot_data_dev volume to /home/gofr-plot/devroot/gofr-plot/data in container"
-echo "Web port: $WEB_PORT, MCP port: $MCP_PORT"
+echo "======================================================================="
 
-docker run -d \
---name gofr-plot_dev \
---network ${DOCKER_NETWORK} \
---user $(id -u):$(id -g) \
--v "$HOME/devroot/gofr-plot":/home/gofr-plot/devroot/gofr-plot \
--v "$HOME/.ssh:/home/gofr-plot/.ssh:ro" \
--v gofr-plot_data_dev:/home/gofr-plot/devroot/gofr-plot/data \
--p 0.0.0.0:$WEB_PORT:8000 \
--p 0.0.0.0:$MCP_PORT:8001 \
-gofr-plot_dev:latest
-
-if docker ps -q -f name=gofr-plot_dev | grep -q .; then
-    echo "Container gofr-plot_dev is now running"
-    
-    # Fix volume permissions if it was just created
-    if [ "$VOLUME_CREATED" = true ]; then
-        echo "Fixing permissions on newly created volume..."
-        docker exec -u root gofr-plot_dev chown -R gofr-plot:gofr-plot /home/gofr-plot/devroot/gofr-plot/data
-        echo "Volume permissions fixed"
-    fi
-    
-    echo ""
-    echo "To connect from shell: docker exec -it gofr-plot_dev /bin/bash"
-    echo "To connect from VS Code: use container name 'gofr-plot_dev'"
-    echo "HTTP REST API available at http://localhost:$WEB_PORT"
-    echo "MCP Streamable HTTP Server available at http://localhost:$MCP_PORT/mcp/"
-    echo "Persistent data stored in Docker volume: gofr-plot_data_dev"
-else
-    echo "ERROR: Container gofr-plot_dev failed to start"
-    exit 1
+# Create docker network if it doesn't exist
+if ! docker network inspect $DOCKER_NETWORK >/dev/null 2>&1; then
+    echo "Creating network: $DOCKER_NETWORK"
+    docker network create $DOCKER_NETWORK
 fi
+
+# Create docker volume for persistent data
+VOLUME_NAME="gofr-plot-data-dev"
+if ! docker volume inspect $VOLUME_NAME >/dev/null 2>&1; then
+    echo "Creating volume: $VOLUME_NAME"
+    docker volume create $VOLUME_NAME
+fi
+
+# Stop and remove existing container
+if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+    echo "Stopping existing container: $CONTAINER_NAME"
+    docker stop "$CONTAINER_NAME" 2>/dev/null || true
+    docker rm "$CONTAINER_NAME" 2>/dev/null || true
+fi
+
+# Run container
+docker run -d \
+    --name "$CONTAINER_NAME" \
+    --network "$DOCKER_NETWORK" \
+    -p ${MCP_PORT}:8050 \
+    -p ${MCPO_PORT}:8051 \
+    -p ${WEB_PORT}:8052 \
+    -v "$PROJECT_ROOT:/home/gofr/devroot/gofr-plot:rw" \
+    -v ${VOLUME_NAME}:/home/gofr/devroot/gofr-plot/data:rw \
+    -e GOFRPLOT_ENV=development \
+    -e GOFRPLOT_DEBUG=true \
+    -e GOFRPLOT_LOG_LEVEL=DEBUG \
+    "$IMAGE_NAME"
+
+echo ""
+echo "======================================================================="
+echo "Container started: $CONTAINER_NAME"
+echo "======================================================================="
+echo ""
+echo "Ports:"
+echo "  - $MCP_PORT: MCP server"
+echo "  - $MCPO_PORT: MCPO proxy"
+echo "  - $WEB_PORT: Web interface"
+echo ""
+echo "Useful commands:"
+echo "  docker logs -f $CONTAINER_NAME          # Follow logs"
+echo "  docker exec -it $CONTAINER_NAME bash    # Shell access"
+echo "  docker stop $CONTAINER_NAME             # Stop container"
