@@ -10,7 +10,8 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+# Note: lib/ contains gofr-common submodule, so we include it but exclude lib64/
+!lib/
 lib64/
 parts/
 sdist/

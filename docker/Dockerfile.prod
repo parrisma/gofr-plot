@@ -6,12 +6,18 @@ RUN groupadd --system gofr-plot
 # Add user 'gofr-plot' with auto-allocated UID and assign to group 'gofr-plot'
 RUN useradd --system --gid gofr-plot --home-dir /home/gofr-plot --create-home gofr-plot
 
-# Create application directory
-RUN mkdir -p /home/gofr-plot/app
+# Create application directory and data directories
+RUN mkdir -p /home/gofr-plot/app \
+    && mkdir -p /home/gofr-plot/data/storage \
+    && mkdir -p /home/gofr-plot/data/auth \
+    && mkdir -p /home/gofr-plot/logs \
+    && chown -R gofr-plot:gofr-plot /home/gofr-plot
 
 # Copy project files
 COPY --chown=gofr-plot:gofr-plot pyproject.toml /home/gofr-plot/
+COPY --chown=gofr-plot:gofr-plot README.md /home/gofr-plot/
 COPY --chown=gofr-plot:gofr-plot app/ /home/gofr-plot/app/
+COPY --chown=gofr-plot:gofr-plot lib/ /home/gofr-plot/lib/
 
 # Switch to gofr-plot user
 USER gofr-plot
@@ -25,12 +31,14 @@ ENV VIRTUAL_ENV=/home/gofr-plot/.venv
 ENV PATH="/home/gofr-plot/.venv/bin:$PATH"
 
 # Install dependencies using UV and pyproject.toml
-RUN uv pip install -e .
+# First install gofr-common from lib/, then the main project
+RUN uv pip install -e ./lib/gofr-common && uv pip install -e .
 
 # Expose ports
-# 8000: HTTP REST API
-# 8001: MCP SSE Server
-EXPOSE 8000 8001
+# 8010: MCP Server
+# 8011: MCPO Server
+# 8012: Web Server
+EXPOSE 8010 8011 8012
 
 # Default command to run the MCP server
 CMD ["python", "-m", "app.main_mcp"]

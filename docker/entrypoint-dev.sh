@@ -21,6 +21,24 @@ if [ -d "$PROJECT_DIR/data" ]; then
     fi
 fi
 
+# Configure Docker socket access
+if [ -S /var/run/docker.sock ]; then
+    echo "Configuring Docker socket access..."
+    # Use provided GID or fallback to socket's GID
+    TARGET_GID=${DOCKER_GID:-$(stat -c '%g' /var/run/docker.sock)}
+    
+    # Check if a group with this GID already exists
+    if ! getent group "$TARGET_GID" >/dev/null; then
+        echo "Creating docker-host group with GID $TARGET_GID"
+        sudo groupadd -g "$TARGET_GID" docker-host
+    fi
+    
+    # Add user to the group (whether it existed or we just created it)
+    # We use the GID directly to be safe
+    echo "Adding user $GOFR_USER to group with GID $TARGET_GID"
+    sudo usermod -aG "$TARGET_GID" "$GOFR_USER"
+fi
+
 # Create subdirectories if they don't exist
 mkdir -p "$PROJECT_DIR/data/storage" "$PROJECT_DIR/data/auth"
 mkdir -p "$PROJECT_DIR/logs"

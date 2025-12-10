@@ -36,11 +36,12 @@ def main():
     """Main function to start MCPO wrapper"""
 
     # Get configuration from environment
+    mcp_host = os.environ.get("GOFR_PLOT_MCP_HOST", "localhost")
     mcp_port = int(os.environ.get("GOFR_PLOT_MCP_PORT", "8001"))
     mcpo_port = int(os.environ.get("GOFR_PLOT_MCPO_PORT", "8002"))
 
     print("Starting MCPO wrapper for gofr-plot MCP server...")
-    print(f"  MCP server: http://localhost:{mcp_port}/mcp")
+    print(f"  MCP server: http://{mcp_host}:{mcp_port}/mcp")
     print(f"  MCPO proxy: http://localhost:{mcpo_port}")
 
     # Check for API key
@@ -63,6 +64,7 @@ def main():
 
     # Start the wrapper
     wrapper = start_mcpo_wrapper(
+        mcp_host=mcp_host,
         mcp_port=mcp_port,
         mcpo_port=mcpo_port,
     )

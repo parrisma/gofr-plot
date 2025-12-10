@@ -1,0 +1,71 @@
+services:
+  # 1. MCP Server (Core Logic)
+  mcp:
+    image: gofr-plot_prod:latest
+    container_name: gofr-plot-mcp
+    restart: unless-stopped
+    command: python -m app.main_mcp --no-auth --host 0.0.0.0 --port 8010
+    environment:
+      - GOFR_PLOT_ENV=PROD
+      - GOFR_PLOT_LOG_LEVEL=INFO
+      # Web URL for proxy mode - use container hostname
+      - GOFR_PLOT_WEB_URL=http://gofr-plot-web:8012
+      # For production with auth, uncomment and set:
+      # - GOFR_PLOT_JWT_SECRET=your-secret-key-here
+    ports:
+      - "8010:8010"
+    volumes:
+      - gofr_data:/home/gofr-plot/data
+    networks:
+      - gofr-net
+
+  # 2. MCPO Server (OpenAPI Wrapper)
+  mcpo:
+    image: gofr-plot_prod:latest
+    container_name: gofr-plot-mcpo
+    restart: unless-stopped
+    depends_on:
+      - mcp
+    command: python -m app.main_mcpo
+    environment:
+      - GOFR_PLOT_ENV=PROD
+      # MCPO needs to connect to MCP server using container hostname
+      - GOFR_PLOT_MCP_PORT=8010
+      - GOFR_PLOT_MCP_HOST=gofr-plot-mcp
+      - GOFR_PLOT_MCPO_PORT=8011
+      - GOFR_PLOT_HOST=0.0.0.0
+    ports:
+      - "8011:8011"
+    volumes:
+      - gofr_data:/home/gofr-plot/data
+    networks:
+      - gofr-net
+
+  # 3. Web Server (Frontend/API)
+  web:
+    image: gofr-plot_prod:latest
+    container_name: gofr-plot-web
+    restart: unless-stopped
+    command: python -m app.main_web --no-auth --host 0.0.0.0 --port 8012
+    environment:
+      - GOFR_PLOT_ENV=PROD
+      # For production with auth, uncomment and set:
+      # - GOFR_PLOT_JWT_SECRET=your-secret-key-here
+    ports:
+      - "8012:8012"
+    volumes:
+      - gofr_data:/home/gofr-plot/data
+    networks:
+      - gofr-net
+
+# Shared Volume for Persistence
+volumes:
+  gofr_data:
+    name: gofr-plot_data
+    external: false # Set to true if you created it manually via CLI
+
+# Shared Network
+networks:
+  gofr-net:
+    name: gofr-net
+    external: true # Assumes network exists (created by other gofr services)

@@ -80,6 +80,9 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
 fi
 
 # Run container
+# Get host Docker GID to allow container to access docker socket
+HOST_DOCKER_GID=$(getent group docker | cut -d: -f3 || echo "999")
+
 docker run -d \
     --name "$CONTAINER_NAME" \
     --network "$DOCKER_NETWORK" \
@@ -88,9 +91,11 @@ docker run -d \
     -p ${WEB_PORT}:8052 \
     -v "$PROJECT_ROOT:/home/gofr/devroot/gofr-plot:rw" \
     -v ${VOLUME_NAME}:/home/gofr/devroot/gofr-plot/data:rw \
+    -v /var/run/docker.sock:/var/run/docker.sock \
     -e GOFRPLOT_ENV=development \
     -e GOFRPLOT_DEBUG=true \
     -e GOFRPLOT_LOG_LEVEL=DEBUG \
+    -e DOCKER_GID="$HOST_DOCKER_GID" \
     "$IMAGE_NAME"
 
 echo ""
