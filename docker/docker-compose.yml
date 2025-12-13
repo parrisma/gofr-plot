@@ -58,11 +58,57 @@ services:
     networks:
       - gofr-net
 
+  # 4. Backup Service (Sidecar using gofr-common shared backup)
+  backup:
+    image: gofr-common-backup:latest
+    container_name: gofr-plot-backup
+    restart: unless-stopped
+    depends_on:
+      - mcp
+      - web
+    environment:
+      # Project identifier (required)
+      - GOFR_PROJECT=plot
+      
+      # Backup scheduling
+      - GOFR_PLOT_BACKUP_ENABLED=${GOFR_PLOT_BACKUP_ENABLED:-true}
+      - GOFR_PLOT_BACKUP_SCHEDULE=${GOFR_PLOT_BACKUP_SCHEDULE:-0 2 * * *}
+      
+      # Retention policies
+      - GOFR_PLOT_BACKUP_RETENTION_DAYS=${GOFR_PLOT_BACKUP_RETENTION_DAYS:-30}
+      - GOFR_PLOT_BACKUP_MAX_COUNT=${GOFR_PLOT_BACKUP_MAX_COUNT:-90}
+      
+      # What to backup (paths relative to /data)
+      - GOFR_PLOT_BACKUP_PATHS=${GOFR_PLOT_BACKUP_PATHS:-storage:storage,auth:auth,logs:../logs}
+      
+      # Compression
+      - GOFR_PLOT_BACKUP_COMPRESSION=${GOFR_PLOT_BACKUP_COMPRESSION:-gzip}
+      - GOFR_PLOT_BACKUP_COMPRESSION_LEVEL=${GOFR_PLOT_BACKUP_COMPRESSION_LEVEL:-6}
+      
+      # Housekeeping
+      - GOFR_PLOT_BACKUP_CLEANUP_ON_START=${GOFR_PLOT_BACKUP_CLEANUP_ON_START:-true}
+      - GOFR_PLOT_BACKUP_VERIFY_AFTER_BACKUP=${GOFR_PLOT_BACKUP_VERIFY_AFTER_BACKUP:-true}
+      
+      # Tiered retention (optional)
+      - GOFR_PLOT_BACKUP_ENABLE_WEEKLY=${GOFR_PLOT_BACKUP_ENABLE_WEEKLY:-false}
+      - GOFR_PLOT_BACKUP_ENABLE_MONTHLY=${GOFR_PLOT_BACKUP_ENABLE_MONTHLY:-false}
+      - GOFR_PLOT_BACKUP_WEEKLY_RETENTION_WEEKS=${GOFR_PLOT_BACKUP_WEEKLY_RETENTION_WEEKS:-8}
+      - GOFR_PLOT_BACKUP_MONTHLY_RETENTION_MONTHS=${GOFR_PLOT_BACKUP_MONTHLY_RETENTION_MONTHS:-12}
+    volumes:
+      - gofr_data:/data:ro              # Read-only access to app data
+      - gofr_backups:/backups:rw        # Write access to backups
+    networks:
+      - gofr-net
+
 # Shared Volume for Persistence
 volumes:
   gofr_data:
     name: gofr-plot_data
     external: false # Set to true if you created it manually via CLI
+  
+  gofr_backups:
+    name: gofr-plot_backups
+    external: false
 
 # Shared Network
 networks:

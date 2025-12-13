@@ -1,0 +1,38 @@
+FROM python:3.11-slim
+
+# Install system dependencies for backup operations
+RUN apt-get update && apt-get install -y \
+    tar \
+    gzip \
+    bzip2 \
+    xz-utils \
+    rsync \
+    cron \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Unix group 'gofr-plot' with auto-allocated GID
+RUN groupadd --system gofr-plot
+
+# Add user 'gofr-plot' with auto-allocated UID and assign to group 'gofr-plot'
+RUN useradd --system --gid gofr-plot --home-dir /home/gofr-plot --create-home gofr-plot
+
+# Create backup directories
+RUN mkdir -p /home/gofr-plot/backup_service \
+    && mkdir -p /backups \
+    && chown -R gofr-plot:gofr-plot /home/gofr-plot /backups
+
+# Install Python dependencies
+RUN pip install --no-cache-dir \
+    apscheduler==3.10.4 \
+    pydantic==2.5.0 \
+    python-dateutil==2.8.2
+
+# Copy backup service code
+COPY --chown=gofr-plot:gofr-plot docker/backup/ /home/gofr-plot/backup_service/
+
+# Switch to gofr-plot user
+USER gofr-plot
+WORKDIR /home/gofr-plot/backup_service
+
+# Default command to run the backup service
+CMD ["python", "-u", "backup_service.py"]

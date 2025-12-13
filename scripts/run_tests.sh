@@ -16,6 +16,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
+# Activate the virtual environment (created by entrypoint-dev.sh)
+VENV_DIR="${PROJECT_ROOT}/.venv"
+if [ -f "${VENV_DIR}/bin/activate" ]; then
+    source "${VENV_DIR}/bin/activate"
+    echo "Activated venv: ${VENV_DIR}"
+else
+    echo "Warning: Virtual environment not found at ${VENV_DIR}"
+    echo "Run the container entrypoint or create venv manually"
+fi
+
 # Source centralized environment configuration in TEST mode
 export GOFR_PLOT_ENV="TEST"
 if [ -f "${PROJECT_ROOT}/gofr-plot.env" ]; then
@@ -340,10 +350,25 @@ if [ "$START_SERVERS" = true ]; then
     echo
 fi
 
-echo -e "${GREEN}=== Running Tests ===${NC}"
+echo -e "${GREEN}=== Running Code Quality Checks ===${NC}"
+set +e
+uv run python -m pytest test/code_quality/ -v
+QUALITY_EXIT_CODE=$?
+set -e
+
+if [ $QUALITY_EXIT_CODE -ne 0 ]; then
+    echo -e "${RED}=== Code Quality Checks Failed ===${NC}"
+    if [ "$START_SERVERS" = true ]; then
+        echo -e "${YELLOW}Stopping test servers...${NC}"
+        stop_servers
+    fi
+    exit $QUALITY_EXIT_CODE
+fi
+
+echo -e "${GREEN}=== Running Functional Tests ===${NC}"
 set +e
 if [ ${#PYTEST_ARGS[@]} -eq 0 ]; then
-    uv run python -m pytest test/ -v
+    uv run python -m pytest test/ --ignore=test/code_quality/ -v
 else
     uv run python -m pytest "${PYTEST_ARGS[@]}"
 fi

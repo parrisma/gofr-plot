@@ -6,10 +6,10 @@ Phase 9: Comprehensive edge case testing for alias functionality
 import pytest
 import json
 from app.storage.file_storage import FileStorage
-from app.storage.file_storage_v2 import FileStorageV2
+from app.storage.common_adapter import CommonStorageAdapter
 
 
-@pytest.fixture(params=[FileStorage, FileStorageV2])
+@pytest.fixture(params=[FileStorage, CommonStorageAdapter])
 def storage(request, tmp_path):
     """Test both storage backends"""
     return request.param(storage_dir=str(tmp_path))
@@ -172,12 +172,12 @@ class TestAliasGuidInteraction:
     def test_register_alias_for_nonexistent_guid(self, storage):
         """Registering alias for non-existent GUID - behavior varies by backend
 
-        FileStorageV2 correctly validates GUID existence and raises ValueError.
+        CommonStorageAdapter correctly validates GUID existence and raises ValueError.
         FileStorage (legacy) allows orphaned aliases.
         """
         fake_guid = "00000000-0000-0000-0000-000000000000"
 
-        if isinstance(storage, FileStorageV2):
+        if isinstance(storage, CommonStorageAdapter):
             # V2 correctly validates GUID existence
             with pytest.raises(ValueError, match="GUID .* not found"):
                 storage.register_alias("orphan-alias", fake_guid, "testgroup")
@@ -222,22 +222,22 @@ class TestAliasPersistence:
         assert storage2.get_alias(guid) == "persistent"
 
     def test_alias_survives_restart_v2(self, sample_image_data, tmp_path):
-        """Aliases should survive FileStorageV2 restart"""
+        """Aliases should survive CommonStorageAdapter restart"""
         # Create storage and save with alias
-        storage1 = FileStorageV2(storage_dir=str(tmp_path))
+        storage1 = CommonStorageAdapter(storage_dir=str(tmp_path))
         guid = storage1.save_image(sample_image_data, "png", "testgroup")
         storage1.register_alias("persistent-v2", guid, "testgroup")
 
         # Create new storage instance
-        storage2 = FileStorageV2(storage_dir=str(tmp_path))
+        storage2 = CommonStorageAdapter(storage_dir=str(tmp_path))
 
         # Alias should still work
         assert storage2.resolve_identifier("persistent-v2", "testgroup") == guid
         assert storage2.get_alias(guid) == "persistent-v2"
 
     def test_alias_in_metadata_file(self, sample_image_data, tmp_path):
-        """Alias should be stored in metadata - FileStorageV2 uses single metadata.json"""
-        storage = FileStorageV2(storage_dir=str(tmp_path))
+        """Alias should be stored in metadata - CommonStorageAdapter uses single metadata.json"""
+        storage = CommonStorageAdapter(storage_dir=str(tmp_path))
         guid = storage.save_image(sample_image_data, "png", "testgroup")
         storage.register_alias("in-metadata", guid, "testgroup")
 
@@ -249,8 +249,10 @@ class TestAliasPersistence:
             metadata = json.load(f)
 
         # Check the GUID entry has alias
+        # gofr-common stores aliases in a list under "aliases" key
         assert guid in metadata
-        assert metadata[guid].get("alias") == "in-metadata"
+        aliases = metadata[guid].get("aliases", [])
+        assert "in-metadata" in aliases
 
 
 class TestAliasGroupIsolation:
@@ -349,7 +351,7 @@ class TestAliasErrorRecovery:
         Note: Current implementation loads corrupted values as-is.
         This could be hardened to validate alias types on load.
         """
-        storage1 = FileStorageV2(storage_dir=str(tmp_path))
+        storage1 = CommonStorageAdapter(storage_dir=str(tmp_path))
         guid = storage1.save_image(sample_image_data, "png", "testgroup")
         storage1.register_alias("valid-alias", guid, "testgroup")
 
@@ -360,7 +362,7 @@ class TestAliasErrorRecovery:
             json.dump({guid: {"alias": 12345, "format": "png", "group": "testgroup"}}, f)
 
         # New storage should load without crashing
-        storage2 = FileStorageV2(storage_dir=str(tmp_path))
+        storage2 = CommonStorageAdapter(storage_dir=str(tmp_path))
 
         # Current behavior: returns corrupted value as-is
         # Hardening improvement: could validate and return None for non-string
@@ -370,7 +372,7 @@ class TestAliasErrorRecovery:
 
     def test_orphaned_alias_in_map(self, sample_image_data, tmp_path):
         """Storage should handle orphaned aliases in internal map"""
-        storage = FileStorageV2(storage_dir=str(tmp_path))
+        storage = CommonStorageAdapter(storage_dir=str(tmp_path))
         guid = storage.save_image(sample_image_data, "png", "testgroup")
         storage.register_alias("orphan-test", guid, "testgroup")
 

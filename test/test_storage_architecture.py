@@ -1,13 +1,14 @@
 """Tests for storage architecture improvements (Phase 3)
 
-Tests the new metadata/blob repository separation and storage registry.
+Tests the shared gofr-common storage implementation and storage registry.
+These tests verify that the CommonStorageAdapter correctly wraps gofr-common storage.
 """
 
 import pytest
 from datetime import datetime, timedelta
-from app.storage.metadata import JsonMetadataRepository, ImageMetadata
-from app.storage.blob import FileBlobRepository
-from app.storage.file_storage_v2 import FileStorageV2
+from gofr_common.storage.metadata import JsonMetadataRepository, BlobMetadata
+from gofr_common.storage.blob import FileBlobRepository
+from app.storage.common_adapter import CommonStorageAdapter
 from app.storage import (
     register_storage_backend,
     list_storage_backends,
@@ -17,6 +18,9 @@ from app.storage import (
     ImageStorageBase,
 )
 
+
+# Alias for backward compatibility in tests
+ImageMetadata = BlobMetadata
 
 # Metadata Repository Tests
 
@@ -205,12 +209,12 @@ def test_file_blob_repository_get_format(tmp_path):
     assert detected == "jpg"
 
 
-# FileStorageV2 Integration Tests
+# CommonStorageAdapter Integration Tests (replaces FileStorageV2)
 
 
-def test_file_storage_v2_save_get(tmp_path):
-    """Test FileStorageV2 save and retrieve"""
-    storage = FileStorageV2(tmp_path)
+def test_common_storage_adapter_save_get(tmp_path):
+    """Test CommonStorageAdapter save and retrieve"""
+    storage = CommonStorageAdapter(tmp_path)
 
     data = b"test image data"
     guid = storage.save_image(data, "png", group="test_group")
@@ -221,9 +225,9 @@ def test_file_storage_v2_save_get(tmp_path):
     assert retrieved[1] == "png"
 
 
-def test_file_storage_v2_group_isolation(tmp_path):
+def test_common_storage_adapter_group_isolation(tmp_path):
     """Test group-based access control"""
-    storage = FileStorageV2(tmp_path)
+    storage = CommonStorageAdapter(tmp_path)
 
     guid = storage.save_image(b"data", "png", group="group1")
 
@@ -234,9 +238,9 @@ def test_file_storage_v2_group_isolation(tmp_path):
         storage.get_image(guid, group="group2")
 
 
-def test_file_storage_v2_delete(tmp_path):
-    """Test FileStorageV2 delete"""
-    storage = FileStorageV2(tmp_path)
+def test_common_storage_adapter_delete(tmp_path):
+    """Test CommonStorageAdapter delete"""
+    storage = CommonStorageAdapter(tmp_path)
 
     guid = storage.save_image(b"data", "png")
     assert storage.exists(guid)
@@ -245,9 +249,9 @@ def test_file_storage_v2_delete(tmp_path):
     assert not storage.exists(guid)
 
 
-def test_file_storage_v2_list_filtered(tmp_path):
-    """Test FileStorageV2 listing with group filter"""
-    storage = FileStorageV2(tmp_path)
+def test_common_storage_adapter_list_filtered(tmp_path):
+    """Test CommonStorageAdapter listing with group filter"""
+    storage = CommonStorageAdapter(tmp_path)
 
     # Save images to different groups
     guid1 = storage.save_image(b"data1", "png", group="group1")
@@ -261,9 +265,9 @@ def test_file_storage_v2_list_filtered(tmp_path):
     assert guid2 in group1_images
 
 
-def test_file_storage_v2_purge(tmp_path):
-    """Test FileStorageV2 purge functionality"""
-    storage = FileStorageV2(tmp_path)
+def test_common_storage_adapter_purge(tmp_path):
+    """Test CommonStorageAdapter purge functionality"""
+    storage = CommonStorageAdapter(tmp_path)
 
     # Save some images
     guid1 = storage.save_image(b"data1", "png")
@@ -328,7 +332,8 @@ def test_get_storage_with_backend(tmp_path):
     reset_storage()
 
     storage = get_storage(str(tmp_path), backend="file_v2")
-    assert isinstance(storage, FileStorageV2)
+    # file_v2 is now mapped to CommonStorageAdapter
+    assert isinstance(storage, CommonStorageAdapter)
 
 
 def test_get_storage_unknown_backend(tmp_path):

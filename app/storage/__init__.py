@@ -2,18 +2,25 @@
 
 Provides abstract base class and concrete implementations for image storage.
 Includes registry pattern for flexible storage backend selection.
+
+NOTE: The recommended storage backend is 'common' (CommonStorageAdapter) which uses
+the shared gofr-common storage implementation. The 'file' backend (FileStorage) is
+maintained for backward compatibility but may be deprecated in future versions.
 """
 
 from app.storage.base import ImageStorageBase
 from app.storage.file_storage import FileStorage
-from app.storage.file_storage_v2 import FileStorageV2
+from app.storage.common_adapter import CommonStorageAdapter
 from app.config import get_default_storage_dir
 from typing import Optional, Dict, Callable
 
 # Storage backend registry
+# 'common' is the preferred backend using gofr-common shared storage
+# 'file' is legacy implementation maintained for backward compatibility
 _STORAGE_BACKENDS: Dict[str, Callable[[str], ImageStorageBase]] = {
-    "file": lambda dir: FileStorage(dir),
-    "file_v2": lambda dir: FileStorageV2(dir),
+    "file": lambda dir: FileStorage(dir),  # Legacy - maintained for compatibility
+    "file_v2": lambda dir: CommonStorageAdapter(dir),  # Alias for common
+    "common": lambda dir: CommonStorageAdapter(dir),   # Preferred backend
 }
 
 # Global storage instance
@@ -108,7 +115,7 @@ def reset_storage() -> None:
 __all__ = [
     "ImageStorageBase",
     "FileStorage",
-    "FileStorageV2",
+    "CommonStorageAdapter",
     "get_storage",
     "set_storage",
     "reset_storage",
