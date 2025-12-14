@@ -113,6 +113,14 @@ class CommonStorageAdapter(ImageStorageBase):
         Raises:
             ValueError: If alias format invalid or already exists
         """
+        # Apply gofr-plot's stricter validation (3-64 chars)
+        import re
+        if not re.match(r"^[a-zA-Z0-9_-]{3,64}$", alias):
+            raise ValueError(
+                f"Invalid alias format: '{alias}'. Must be 3-64 characters, "
+                "alphanumeric with hyphens/underscores only."
+            )
+        
         self._storage.register_alias(alias, guid, group)
 
     def unregister_alias(self, alias: str, group: str) -> bool:

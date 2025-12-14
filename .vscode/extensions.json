@@ -1,14 +1,15 @@
 {
     "recommendations": [
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+        "ms-python.black-formatter",
+        "charliermarsh.ruff",
+        "njpwerner.autodocstring",
         "bierner.markdown-preview-github-styles",
         "github.copilot",
         "github.copilot-chat",
         "github.vscode-pull-request-github",
-        "ms-python.black-formatter",
-        "ms-python.debugpy",
-        "ms-python.python",
-        "ms-python.vscode-pylance",
-        "ms-python.vscode-python-envs",
-        "njpwerner.autodocstring"
+        "streetsidesoftware.code-spell-checker"
     ]
 }

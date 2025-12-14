@@ -48,6 +48,7 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
     "pyright>=1.1.0",
+    "bandit>=1.7.0",
 ]
 
 [tool.pytest.ini_options]
@@ -91,3 +92,7 @@ directory = "htmlcov"
 
 [tool.coverage.xml]
 output = "coverage.xml"
+
+[tool.bandit]
+exclude_dirs = ["test"]
+skips = ["B101"]

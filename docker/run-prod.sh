@@ -1,103 +1,132 @@
-#!/bin/sh
+#!/bin/bash
+# =======================================================================
+# GOFR-PLOT Production Run Script
+# Runs the production container with proper volumes and networking
+# =======================================================================
 
-# Usage: ./run-prod.sh [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]
-# Defaults: NETWORK=gofr-net, WEB_PORT=8000, MCP_PORT=8001
-# Example: ./run-prod.sh -n my-network -w 9000 -m 9001
+set -e
 
-# Default values (can be overridden by env vars or command line)
+# Default values
 DOCKER_NETWORK="${GOFR_PLOT_NETWORK:-gofr-net}"
-WEB_PORT=8000
-MCP_PORT=8001
+MCP_PORT="${GOFR_PLOT_MCP_PORT:-8050}"
+MCPO_PORT="${GOFR_PLOT_MCPO_PORT:-8051}"
+WEB_PORT="${GOFR_PLOT_WEB_PORT:-8052}"
+CONTAINER_NAME="gofr-plot-prod"
+IMAGE_NAME="gofr-plot:latest"
+
+# JWT Secret - REQUIRED
+JWT_SECRET="${GOFR_PLOT_JWT_SECRET:-}"
 
 # Parse command line arguments
-while getopts "n:w:m:h" opt; do
+while getopts "n:m:o:w:s:h" opt; do
     case $opt in
-        n)
-            DOCKER_NETWORK=$OPTARG
-            ;;
-        w)
-            WEB_PORT=$OPTARG
-            ;;
-        m)
-            MCP_PORT=$OPTARG
-            ;;
+        n) DOCKER_NETWORK=$OPTARG ;;
+        m) MCP_PORT=$OPTARG ;;
+        o) MCPO_PORT=$OPTARG ;;
+        w) WEB_PORT=$OPTARG ;;
+        s) JWT_SECRET=$OPTARG ;;
         h)
-            echo "Usage: $0 [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]"
-            echo "  -n NETWORK   Docker network to attach to (default: gofr-net)"
-            echo "  -w WEB_PORT  Port to expose web server on (default: 8000)"
-            echo "  -m MCP_PORT  Port to expose MCP server on (default: 8001)"
+            echo "Usage: $0 [-n NETWORK] [-m MCP_PORT] [-o MCPO_PORT] [-w WEB_PORT] [-s JWT_SECRET]"
+            echo ""
+            echo "Options:"
+            echo "  -n NETWORK     Docker network (default: gofr-net)"
+            echo "  -m MCP_PORT    MCP server port (default: 8050)"
+            echo "  -o MCPO_PORT   MCPO server port (default: 8051)"
+            echo "  -w WEB_PORT    Web server port (default: 8052)"
+            echo "  -s JWT_SECRET  JWT secret key (required, or set GOFR_PLOT_JWT_SECRET)"
             echo ""
             echo "Environment Variables:"
-            echo "  GOFR_PLOT_NETWORK  Default network (default: gofr-net)"
+            echo "  GOFR_PLOT_NETWORK, GOFR_PLOT_MCP_PORT, GOFR_PLOT_MCPO_PORT"
+            echo "  GOFR_PLOT_WEB_PORT, GOFR_PLOT_JWT_SECRET"
             exit 0
             ;;
-        \?)
-            echo "Usage: $0 [-n NETWORK] [-w WEB_PORT] [-m MCP_PORT]"
-            exit 1
-            ;;
+        \?) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
     esac
 done
 
+# Validate JWT secret
+if [ -z "$JWT_SECRET" ]; then
+    echo "ERROR: JWT_SECRET is required"
+    echo "Set GOFR_PLOT_JWT_SECRET environment variable or use -s option"
+    exit 1
+fi
+
+echo "======================================================================="
+echo "Starting GOFR-PLOT Production Container"
+echo "======================================================================="
+
 # Create docker network if it doesn't exist
-echo "Checking for ${DOCKER_NETWORK} network..."
 if ! docker network inspect ${DOCKER_NETWORK} >/dev/null 2>&1; then
-    echo "Creating ${DOCKER_NETWORK} network..."
+    echo "Creating network: ${DOCKER_NETWORK}"
     docker network create ${DOCKER_NETWORK}
 else
-    echo "Network ${DOCKER_NETWORK} already exists"
+    echo "Network exists: ${DOCKER_NETWORK}"
 fi
 
-# Create docker volume for persistent data if it doesn't exist
-echo "Checking for gofr-plot_data volume..."
-if ! docker volume inspect gofr-plot_data >/dev/null 2>&1; then
-    echo "Creating gofr-plot_data volume..."
-    docker volume create gofr-plot_data
-    VOLUME_CREATED=true
-else
-    echo "Volume gofr-plot_data already exists"
-    VOLUME_CREATED=false
-fi
-
-# Stop and remove existing container if it exists
-echo "Stopping existing gofr-plot_prod container..."
-docker stop gofr-plot_prod 2>/dev/null || true
-
-echo "Removing existing gofr-plot_prod container..."
-docker rm gofr-plot_prod 2>/dev/null || true
-
-echo "Starting new gofr-plot_prod container..."
-echo "Network: $DOCKER_NETWORK"
-echo "Mounting gofr-plot_data volume to /home/gofr-plot/data in container"
-echo "Web port: $WEB_PORT, MCP port: $MCP_PORT"
-
-docker run -d \
---name gofr-plot_prod \
---network ${DOCKER_NETWORK} \
--v gofr-plot_data:/home/gofr-plot/data \
--p $WEB_PORT:8000 \
--p $MCP_PORT:8001 \
-gofr-plot_prod:latest
-
-if docker ps -q -f name=gofr-plot_prod | grep -q .; then
-    echo "Container gofr-plot_prod is now running"
-    
-    # Fix volume permissions if it was just created
-    if [ "$VOLUME_CREATED" = true ]; then
-        echo "Fixing permissions on newly created volume..."
-        docker exec -u root gofr-plot_prod chown -R gofr-plot:gofr-plot /home/gofr-plot/data
-        echo "Volume permissions fixed"
+# Create volumes if they don't exist
+for vol in gofr-plot-data gofr-plot-logs; do
+    if ! docker volume inspect ${vol} >/dev/null 2>&1; then
+        echo "Creating volume: ${vol}"
+        docker volume create ${vol}
+    else
+        echo "Volume exists: ${vol}"
     fi
-    
+done
+
+# Stop and remove existing container
+if docker ps -aq -f name=${CONTAINER_NAME} | grep -q .; then
+    echo "Stopping existing container..."
+    docker stop ${CONTAINER_NAME} 2>/dev/null || true
+    docker rm ${CONTAINER_NAME} 2>/dev/null || true
+fi
+
+echo ""
+echo "Configuration:"
+echo "  Network:    ${DOCKER_NETWORK}"
+echo "  MCP Port:   ${MCP_PORT} -> 8010"
+echo "  MCPO Port:  ${MCPO_PORT} -> 8011"
+echo "  Web Port:   ${WEB_PORT} -> 8012"
+echo "  Data:       gofr-plot-data -> /home/gofr-plot/data"
+echo "  Logs:       gofr-plot-logs -> /home/gofr-plot/logs"
+echo ""
+
+# Run the container
+docker run -d \
+    --name ${CONTAINER_NAME} \
+    --network ${DOCKER_NETWORK} \
+    --restart unless-stopped \
+    -v gofr-plot-data:/home/gofr-plot/data \
+    -v gofr-plot-logs:/home/gofr-plot/logs \
+    -p ${MCP_PORT}:8010 \
+    -p ${MCPO_PORT}:8011 \
+    -p ${WEB_PORT}:8012 \
+    -e GOFR_PLOT_JWT_SECRET="${JWT_SECRET}" \
+    -e GOFR_PLOT_MCP_PORT=8010 \
+    -e GOFR_PLOT_MCPO_PORT=8011 \
+    -e GOFR_PLOT_WEB_PORT=8012 \
+    ${IMAGE_NAME}
+
+# Wait for container to start
+sleep 2
+
+if docker ps -q -f name=${CONTAINER_NAME} | grep -q .; then
+    echo "======================================================================="
+    echo "Container started: ${CONTAINER_NAME}"
+    echo "======================================================================="
     echo ""
-    echo "HTTP REST API available at http://localhost:$WEB_PORT"
-    echo "MCP Streamable HTTP Server available at http://localhost:$MCP_PORT/mcp/"
-    echo "Persistent data stored in Docker volume: gofr-plot_data"
+    echo "Endpoints:"
+    echo "  MCP Server:  http://localhost:${MCP_PORT}/mcp"
+    echo "  MCPO (REST): http://localhost:${MCPO_PORT}"
+    echo "  Web Server:  http://localhost:${WEB_PORT}"
+    echo "  Health:      http://localhost:${WEB_PORT}/ping"
     echo ""
-    echo "To run web server: docker exec -it gofr-plot_prod python -m app.main_web"
-    echo "To view logs: docker logs -f gofr-plot_prod"
-    echo "To stop: docker stop gofr-plot_prod"
+    echo "Useful commands:"
+    echo "  docker logs -f ${CONTAINER_NAME}     # Follow logs"
+    echo "  docker exec -it ${CONTAINER_NAME} bash  # Shell access"
+    echo "  docker stop ${CONTAINER_NAME}        # Stop container"
+    echo "======================================================================="
 else
-    echo "ERROR: Container gofr-plot_prod failed to start"
-    docker logs gofr-plot_prod
+    echo "ERROR: Container failed to start"
+    docker logs ${CONTAINER_NAME}
     exit 1
 fi

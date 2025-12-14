@@ -363,7 +363,7 @@ class TestAliasErrorHandling:
                     "y1": [1, 2, 3],
                     "proxy": True,
                     "return_base64": False,
-                    "alias": "ab",  # Too short - invalid
+                    "alias": "a",  # Too short - invalid (must be 3-64 chars)
                 },
             )
 

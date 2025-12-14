@@ -1,170 +1,96 @@
 {
     "version": "0.2.0",
     "configurations": [
-        // ===== Quick Start - All Servers =====
-        {
-            "name": "Start All Servers",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_all_servers.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "Stop All Servers",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/stop_all_servers.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        // ===== Testing =====
         {
             "name": "Run All Tests",
             "type": "node-terminal",
             "request": "launch",
-            "command": "bash scripts/run_tests.sh --with-servers",
+            "command": "bash scripts/run_tests.sh",
             "cwd": "${workspaceFolder}"
         },
         {
-            "name": "Run Tests with Coverage",
+            "name": "Run Tests (Verbose)",
             "type": "node-terminal",
             "request": "launch",
-            "command": "bash scripts/run_tests_with_coverage.sh",
+            "command": "bash scripts/run_tests.sh -v",
             "cwd": "${workspaceFolder}"
         },
-        // ===== Individual Servers (No Auth - Development) =====
-        {
-            "name": "MCP Server (No Auth)",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_mcp.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "Web Server (No Auth)",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_web.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "MCPO Wrapper (No Auth)",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_mcpo.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        // ===== Individual Servers (With Auth - Production) =====
-        {
-            "name": "MCP Server (With Auth)",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_mcp_auth.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "Web Server (With Auth)",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_web_auth.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        {
-            "name": "MCPO Wrapper (With Auth)",
-            "type": "node-terminal",
-            "request": "launch",
-            "command": "bash scripts/run_mcpo_auth.sh",
-            "cwd": "${workspaceFolder}"
-        },
-        // ===== Debug Mode (Python Debugger) =====
         {
             "name": "Debug: MCP Server (No Auth)",
             "type": "debugpy",
             "request": "launch",
             "module": "app.main_mcp",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "GPLOT_DATA_DIR": "${workspaceFolder}/data"
-            },
             "args": [
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8001",
-                "--no-auth",
-                "--web-url",
-                "http://172.22.9.172:8000"
-            ]
-        },
-        {
-            "name": "Debug: Web Server (No Auth)",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "app.main_web",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "GPLOT_DATA_DIR": "${workspaceFolder}/data"
-            },
-            "args": [
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8000",
+                "--port", "8001",
                 "--no-auth"
-            ]
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "GOFR_PLOT_ENV": "TEST",
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         },
         {
             "name": "Debug: MCP Server (With Auth)",
             "type": "debugpy",
             "request": "launch",
             "module": "app.main_mcp",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "GPLOT_JWT_SECRET": "test-secret-key-for-secure-testing-do-not-use-in-production",
-                "GPLOT_TOKEN_STORE": "/tmp/gplot_test_tokens.json",
-                "GPLOT_DATA_DIR": "${workspaceFolder}/test/data"
-            },
             "args": [
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8001",
-                "--jwt-secret",
-                "test-secret-key-for-secure-testing-do-not-use-in-production",
-                "--token-store",
-                "/tmp/gplot_test_tokens.json",
-                "--web-url",
-                "http://localhost:8000"
-            ]
+                "--port", "8001",
+                "--jwt-secret", "test-secret-key-for-secure-testing-do-not-use-in-production",
+                "--token-store", "${workspaceFolder}/logs/gofr-plot_tokens_test.json"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "GOFR_PLOT_ENV": "TEST",
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Debug: Web Server (No Auth)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "app.main_web",
+            "args": [
+                "--port", "8000",
+                "--no-auth"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "GOFR_PLOT_ENV": "TEST",
+                "PYTHONPATH": "${workspaceFolder}"
+            }
         },
         {
             "name": "Debug: Web Server (With Auth)",
             "type": "debugpy",
             "request": "launch",
             "module": "app.main_web",
-            "console": "integratedTerminal",
-            "cwd": "${workspaceFolder}",
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}",
-                "GPLOT_JWT_SECRET": "test-secret-key-for-secure-testing-do-not-use-in-production",
-                "GPLOT_TOKEN_STORE": "/tmp/gplot_test_tokens.json",
-                "GPLOT_DATA_DIR": "${workspaceFolder}/test/data"
-            },
             "args": [
-                "--host",
-                "0.0.0.0",
-                "--port",
-                "8000",
-                "--jwt-secret",
-                "test-secret-key-for-secure-testing-do-not-use-in-production",
-                "--token-store",
-                "/tmp/gplot_test_tokens.json"
-            ]
+                "--port", "8000",
+                "--jwt-secret", "test-secret-key-for-secure-testing-do-not-use-in-production",
+                "--token-store", "${workspaceFolder}/logs/gofr-plot_tokens_test.json"
+            ],
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "env": {
+                "GOFR_PLOT_ENV": "TEST",
+                "PYTHONPATH": "${workspaceFolder}"
+            }
+        },
+        {
+            "name": "Utility: Create Token",
+            "type": "node-terminal",
+            "request": "launch",
+            "command": "bash scripts/token_manager.sh create --group test_group",
+            "cwd": "${workspaceFolder}"
         }
     ]
 }

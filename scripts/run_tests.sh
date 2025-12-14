@@ -1,63 +1,109 @@
 #!/bin/bash
-# gofr-plot Test Runner
-# Mirrors doco workflow: consistent auth config, cleanup, optional server start, pytest execution.
+# =============================================================================
+# GOFR-Plot Test Runner
+# =============================================================================
+# Standardized test runner script with consistent configuration across all
+# GOFR projects. This script:
+# - Sets up virtual environment and PYTHONPATH
+# - Configures test ports for MCP, Web, and MCPO servers
+# - Supports coverage reporting
+# - Supports Docker execution
+# - Supports test categories (unit, integration, all)
+# - Manages server lifecycle for integration tests
+#
+# Usage:
+#   ./scripts/run_tests.sh                          # Run all tests
+#   ./scripts/run_tests.sh test/mcp/                # Run specific test directory
+#   ./scripts/run_tests.sh -k "plot"                # Run tests matching keyword
+#   ./scripts/run_tests.sh -v                       # Run with verbose output
+#   ./scripts/run_tests.sh --coverage               # Run with coverage report
+#   ./scripts/run_tests.sh --coverage-html          # Run with HTML coverage report
+#   ./scripts/run_tests.sh --docker                 # Run tests in Docker container
+#   ./scripts/run_tests.sh --unit                   # Run unit tests only (no servers)
+#   ./scripts/run_tests.sh --integration            # Run integration tests (with servers)
+#   ./scripts/run_tests.sh --no-servers             # Run without starting servers
+#   ./scripts/run_tests.sh --stop                   # Stop servers only
+#   ./scripts/run_tests.sh --cleanup-only           # Clean environment only
+# =============================================================================
 
-set -euo pipefail
+set -euo pipefail  # Exit on error, undefined vars, pipe failures
 
-# Colors for status output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+# =============================================================================
+# CONFIGURATION
+# =============================================================================
 
-# Locate project root relative to this script
+# Get script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 cd "${PROJECT_ROOT}"
 
-# Activate the virtual environment (created by entrypoint-dev.sh)
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Project-specific configuration
+PROJECT_NAME="gofr-plot"
+ENV_PREFIX="GOFR_PLOT"
+CONTAINER_NAME="gofr-plot-dev"
+TEST_DIR="test"
+COVERAGE_SOURCE="app"
+LOG_DIR="${PROJECT_ROOT}/logs"
+
+# Activate virtual environment
 VENV_DIR="${PROJECT_ROOT}/.venv"
 if [ -f "${VENV_DIR}/bin/activate" ]; then
     source "${VENV_DIR}/bin/activate"
     echo "Activated venv: ${VENV_DIR}"
 else
-    echo "Warning: Virtual environment not found at ${VENV_DIR}"
-    echo "Run the container entrypoint or create venv manually"
+    echo -e "${YELLOW}Warning: Virtual environment not found at ${VENV_DIR}${NC}"
 fi
 
-# Source centralized environment configuration in TEST mode
+# Source centralized environment configuration
 export GOFR_PLOT_ENV="TEST"
 if [ -f "${PROJECT_ROOT}/gofr-plot.env" ]; then
     source "${PROJECT_ROOT}/gofr-plot.env"
 fi
 
-# Shared authentication configuration
-export GOFR_PLOT_JWT_SECRET="test-secret-key-for-secure-testing-do-not-use-in-production"
-export GOFR_PLOT_TOKEN_STORE="${GOFR_PLOT_TOKEN_STORE:-${GOFR_PLOT_LOGS}/gofr-plot_tokens_test.json}"
-export GOFR_PLOT_MCP_PORT="${GOFR_PLOT_MCP_PORT:-8010}"
-export GOFR_PLOT_WEB_PORT="${GOFR_PLOT_WEB_PORT:-8012}"
-export GOFR_PLOT_MCPO_PORT="${GOFR_PLOT_MCPO_PORT:-8011}"
+# Set up PYTHONPATH for gofr-common discovery
+if [ -d "${PROJECT_ROOT}/lib/gofr-common/src" ]; then
+    export PYTHONPATH="${PROJECT_ROOT}:${PROJECT_ROOT}/lib/gofr-common/src:${PYTHONPATH:-}"
+elif [ -d "${PROJECT_ROOT}/../gofr-common/src" ]; then
+    export PYTHONPATH="${PROJECT_ROOT}:${PROJECT_ROOT}/../gofr-common/src:${PYTHONPATH:-}"
+else
+    export PYTHONPATH="${PROJECT_ROOT}:${PYTHONPATH:-}"
+fi
 
-# Use centralized paths from gofr-plot.env or fallback
-TEST_DATA_ROOT="${GOFR_PLOT_DATA:-test/data}"
-STORAGE_DIR="${GOFR_PLOT_STORAGE:-${TEST_DATA_ROOT}/storage}"
-AUTH_DIR="${GOFR_PLOT_AUTH:-${TEST_DATA_ROOT}/auth}"
-# Directories are auto-created by gofr-plot.env, but ensure they exist
-mkdir -p "${STORAGE_DIR}" "${AUTH_DIR}"
+# Test configuration
+export GOFR_PLOT_JWT_SECRET="test-secret-key-for-secure-testing-do-not-use-in-production"
+export GOFR_PLOT_TOKEN_STORE="${GOFR_PLOT_TOKEN_STORE:-${LOG_DIR}/${PROJECT_NAME}_tokens_test.json}"
+# Port configuration - using centralized gofr-common port allocation
+# gofr-plot: MCP=8050, MCPO=8051, Web=8052
+export GOFR_PLOT_MCP_PORT="${GOFR_PLOT_MCP_PORT:-8050}"
+export GOFR_PLOT_WEB_PORT="${GOFR_PLOT_WEB_PORT:-8052}"
+export GOFR_PLOT_MCPO_PORT="${GOFR_PLOT_MCPO_PORT:-8051}"
+
+# Ensure directories exist
+mkdir -p "${LOG_DIR}"
+mkdir -p "${GOFR_PLOT_STORAGE:-${PROJECT_ROOT}/data/storage}"
+mkdir -p "${GOFR_PLOT_AUTH:-${PROJECT_ROOT}/data/auth}"
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
 
 print_header() {
-    echo -e "${GREEN}=== GOFR_PLOT Test Runner ===${NC}"
+    echo -e "${GREEN}=== ${PROJECT_NAME} Test Runner ===${NC}"
     echo "Project root: ${PROJECT_ROOT}"
-    echo "Environment: ${GOFR_PLOT_ENV:-NONE}"
+    echo "Environment: ${GOFR_PLOT_ENV}"
     echo "JWT Secret: ${GOFR_PLOT_JWT_SECRET:0:20}..."
     echo "Token store: ${GOFR_PLOT_TOKEN_STORE}"
     echo "MCP Port: ${GOFR_PLOT_MCP_PORT}"
     echo "Web Port: ${GOFR_PLOT_WEB_PORT}"
     echo "MCPO Port: ${GOFR_PLOT_MCPO_PORT}"
-    echo "Storage Dir: ${STORAGE_DIR}"
-    echo "Auth Dir: ${AUTH_DIR}"
-    echo
+    echo ""
 }
 
 port_in_use() {
@@ -73,75 +119,53 @@ port_in_use() {
     fi
 }
 
-stop_servers() {
-    echo "Killing server processes..."
-    pkill -9 -f "python.*main_mcp.py" 2>/dev/null || true
-    pkill -9 -f "python.*main_web.py" 2>/dev/null || true
-    pkill -9 -f "mcpo" 2>/dev/null || true
-    
-    # Also kill by module invocation pattern
-    pkill -9 -f "python.*-m.*app.main_mcp" 2>/dev/null || true
-    pkill -9 -f "python.*-m.*app.main_web" 2>/dev/null || true
-    
-    # Wait for processes to die
-    sleep 2
-    
-    # Verify all dead
-    if ps aux | grep -E "python.*(main_mcp|main_web)|mcpo" | grep -v grep >/dev/null 2>&1; then
-        echo -e "${RED}WARNING: Some server processes still running after kill attempt${NC}"
-        ps aux | grep -E "python.*(main_mcp|main_web)|mcpo" | grep -v grep
-        return 1
-    else
-        echo "All server processes confirmed dead"
-        return 0
-    fi
-}
-
 free_port() {
     local port=$1
     if ! port_in_use "$port"; then
         return 0
     fi
-
     if command -v lsof >/dev/null 2>&1; then
         lsof -ti ":${port}" | xargs -r kill -9 2>/dev/null || true
     elif command -v ss >/dev/null 2>&1; then
         ss -lptn "sport = :${port}" 2>/dev/null | grep -o 'pid=[0-9]*' | cut -d'=' -f2 | xargs -r kill -9 2>/dev/null || true
-    elif command -v netstat >/dev/null 2>&1; then
-        netstat -tlnp 2>/dev/null | grep ":${port} " | awk '{print $7}' | cut -d'/' -f1 | xargs -r kill -9 2>/dev/null || true
     fi
     sleep 1
 }
 
-cleanup_environment() {
-    echo -e "${YELLOW}Cleaning up any previous test servers...${NC}"
-    if ! stop_servers; then
-        echo -e "${RED}Force killing remaining processes...${NC}"
-        ps aux | grep -E "python.*(main_mcp|main_web)" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true
-        sleep 1
-        stop_servers || true
-    fi
-
-    echo -e "${YELLOW}Purging token store and transient data...${NC}"
+stop_servers() {
+    echo "Stopping server processes..."
+    pkill -9 -f "python.*main_mcp" 2>/dev/null || true
+    pkill -9 -f "python.*main_web" 2>/dev/null || true
+    pkill -9 -f "mcpo" 2>/dev/null || true
+    sleep 2
     
-    # Empty token store (create empty JSON object)
+    if ps aux | grep -E "python.*(main_mcp|main_web)|mcpo" | grep -v grep >/dev/null 2>&1; then
+        echo -e "${RED}WARNING: Some server processes still running${NC}"
+        return 1
+    fi
+    echo "All server processes stopped"
+    return 0
+}
+
+cleanup_environment() {
+    echo -e "${YELLOW}Cleaning up test environment...${NC}"
+    stop_servers || true
+    
+    # Empty token store
     echo "{}" > "${GOFR_PLOT_TOKEN_STORE}" 2>/dev/null || true
     echo "Token store emptied: ${GOFR_PLOT_TOKEN_STORE}"
     
-    # Clean up other transient data
+    # Clean up transient data
     rm -f data/sessions/*.json 2>/dev/null || true
-    uv run python scripts/storage_manager.py purge --age-days=0 --yes 2>/dev/null || \
-        echo "  (storage purge skipped - no existing data)"
-    echo -e "${GREEN}Cleanup complete${NC}\n"
+    
+    echo -e "${GREEN}Cleanup complete${NC}"
 }
 
 start_mcp_server() {
-    local log_file="${PROJECT_ROOT}/logs/gofr-plot_mcp_test.log"
+    local log_file="${LOG_DIR}/${PROJECT_NAME}_mcp_test.log"
     echo -e "${YELLOW}Starting MCP server on port ${GOFR_PLOT_MCP_PORT}...${NC}"
     
     free_port "${GOFR_PLOT_MCP_PORT}"
-    
-    # Remove stale log file
     rm -f "${log_file}"
 
     nohup uv run python app/main_mcp.py \
@@ -149,12 +173,11 @@ start_mcp_server() {
         --jwt-secret "${GOFR_PLOT_JWT_SECRET}" \
         --token-store "${GOFR_PLOT_TOKEN_STORE}" \
         --web-url "http://localhost:${GOFR_PLOT_WEB_PORT}" \
-        --proxy-url-mode url \
         > "${log_file}" 2>&1 &
     MCP_PID=$!
     echo "MCP PID: ${MCP_PID}"
 
-    echo -n "Waiting for MCP server to start"
+    echo -n "Waiting for MCP server"
     for _ in {1..30}; do
         if ! kill -0 ${MCP_PID} 2>/dev/null; then
             echo -e " ${RED}✗${NC}"
@@ -174,12 +197,10 @@ start_mcp_server() {
 }
 
 start_web_server() {
-    local log_file="${PROJECT_ROOT}/logs/gofr-plot_web_test.log"
+    local log_file="${LOG_DIR}/${PROJECT_NAME}_web_test.log"
     echo -e "${YELLOW}Starting Web server on port ${GOFR_PLOT_WEB_PORT}...${NC}"
     
     free_port "${GOFR_PLOT_WEB_PORT}"
-    
-    # Remove stale log file
     rm -f "${log_file}"
 
     nohup uv run python app/main_web.py \
@@ -190,7 +211,7 @@ start_web_server() {
     WEB_PID=$!
     echo "Web PID: ${WEB_PID}"
 
-    echo -n "Waiting for web server to start"
+    echo -n "Waiting for Web server"
     for _ in {1..30}; do
         if ! kill -0 ${WEB_PID} 2>/dev/null; then
             echo -e " ${RED}✗${NC}"
@@ -210,32 +231,12 @@ start_web_server() {
 }
 
 start_mcpo_server() {
-    local log_file="${PROJECT_ROOT}/logs/gofr-plot_mcpo_test.log"
-    echo -e "${YELLOW}Starting MCPO wrapper on port ${GOFR_PLOT_MCPO_PORT}...${NC}"
+    local log_file="${LOG_DIR}/${PROJECT_NAME}_mcpo_test.log"
+    echo -e "${YELLOW}Starting MCPO server on port ${GOFR_PLOT_MCPO_PORT}...${NC}"
     
     free_port "${GOFR_PLOT_MCPO_PORT}"
-    
-    # Remove stale log file
     rm -f "${log_file}"
-    
-    # Wait for MCP server to be available first
-    echo -n "Checking MCP server availability"
-    for i in {1..30}; do
-        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${GOFR_PLOT_MCP_PORT}/" 2>/dev/null || echo "000")
-        if [[ "${HTTP_CODE}" =~ ^(200|404|405)$ ]]; then
-            echo -e " ${GREEN}✓${NC}"
-            break
-        fi
-        if [ $i -eq 30 ]; then
-            echo -e " ${RED}✗${NC}"
-            echo -e "${RED}MCP server not available for MCPO${NC}"
-            return 1
-        fi
-        echo -n "."
-        sleep 0.5
-    done
 
-    # Start MCPO wrapper (no API key for test mode - JWT passthrough)
     uv tool run mcpo \
         --port "${GOFR_PLOT_MCPO_PORT}" \
         --server-type "streamable-http" \
@@ -244,7 +245,7 @@ start_mcpo_server() {
     MCPO_PID=$!
     echo "MCPO PID: ${MCPO_PID}"
 
-    echo -n "Waiting for MCPO server to start"
+    echo -n "Waiting for MCPO server"
     for _ in {1..30}; do
         if ! kill -0 ${MCPO_PID} 2>/dev/null; then
             echo -e " ${RED}✗${NC}"
@@ -252,11 +253,8 @@ start_mcpo_server() {
             return 1
         fi
         if port_in_use "${GOFR_PLOT_MCPO_PORT}"; then
-            # Additional check: verify health endpoint responds
-            if curl -s "http://localhost:${GOFR_PLOT_MCPO_PORT}/health" >/dev/null 2>&1; then
-                echo -e " ${GREEN}✓${NC}"
-                return 0
-            fi
+            echo -e " ${GREEN}✓${NC}"
+            return 0
         fi
         echo -n "."
         sleep 0.5
@@ -266,38 +264,83 @@ start_mcpo_server() {
     return 1
 }
 
-print_header
+# =============================================================================
+# ARGUMENT PARSING
+# =============================================================================
 
+USE_DOCKER=false
 START_SERVERS=true
-START_MCPO=true
+COVERAGE=false
+COVERAGE_HTML=false
+RUN_UNIT=false
+RUN_INTEGRATION=false
+RUN_ALL=false
 STOP_ONLY=false
 CLEANUP_ONLY=false
 PYTEST_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --with-servers|--start-servers)
-            START_SERVERS=true
-            START_MCPO=true
+        --docker)
+            USE_DOCKER=true
             shift
             ;;
-        --with-mcpo)
+        --coverage|--cov)
+            COVERAGE=true
+            shift
+            ;;
+        --coverage-html)
+            COVERAGE=true
+            COVERAGE_HTML=true
+            shift
+            ;;
+        --unit)
+            RUN_UNIT=true
+            START_SERVERS=false
+            shift
+            ;;
+        --integration)
+            RUN_INTEGRATION=true
             START_SERVERS=true
-            START_MCPO=true
+            shift
+            ;;
+        --all)
+            RUN_ALL=true
+            START_SERVERS=true
             shift
             ;;
         --no-servers|--without-servers)
             START_SERVERS=false
-            START_MCPO=false
+            shift
+            ;;
+        --with-servers|--start-servers)
+            START_SERVERS=true
+            shift
+            ;;
+        --stop|--stop-servers)
+            STOP_ONLY=true
             shift
             ;;
         --cleanup-only)
             CLEANUP_ONLY=true
             shift
             ;;
-        --stop|--stop-servers)
-            STOP_ONLY=true
-            shift
+        --help|-h)
+            echo "Usage: $0 [OPTIONS] [PYTEST_ARGS...]"
+            echo ""
+            echo "Options:"
+            echo "  --docker         Run tests inside Docker container"
+            echo "  --coverage       Run with coverage report"
+            echo "  --coverage-html  Run with HTML coverage report"
+            echo "  --unit           Run unit tests only (no servers)"
+            echo "  --integration    Run integration tests (with servers)"
+            echo "  --all            Run all test categories"
+            echo "  --no-servers     Don't start test servers"
+            echo "  --with-servers   Start test servers (default)"
+            echo "  --stop           Stop servers and exit"
+            echo "  --cleanup-only   Clean environment and exit"
+            echo "  --help, -h       Show this help message"
+            exit 0
             ;;
         *)
             PYTEST_ARGS+=("$1")
@@ -306,105 +349,164 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# =============================================================================
+# MAIN EXECUTION
+# =============================================================================
+
+print_header
+
+# Handle stop-only mode
 if [ "$STOP_ONLY" = true ]; then
     echo -e "${YELLOW}Stopping servers and exiting...${NC}"
     stop_servers
     exit 0
 fi
 
+# Handle cleanup-only mode
 if [ "$CLEANUP_ONLY" = true ]; then
     cleanup_environment
     exit 0
 fi
 
+# Clean up before starting
 cleanup_environment
 
-# Seed default admin token if requested tokens file missing
+# Initialize token store
 if [ ! -f "${GOFR_PLOT_TOKEN_STORE}" ]; then
-    echo -e "${BLUE}Seeding bootstrap token store...${NC}"
-    cat <<'JSON' > "${GOFR_PLOT_TOKEN_STORE}"
-{}
-JSON
+    echo "{}" > "${GOFR_PLOT_TOKEN_STORE}"
 fi
 
-create_bootstrap_token() {
-    uv run python - <<'PY'
-import os
-from app.auth import AuthService
-secret = os.environ["GOFR_PLOT_JWT_SECRET"]
-store = os.environ["GOFR_PLOT_TOKEN_STORE"]
-svc = AuthService(secret_key=secret, token_store_path=store)
-token = svc.create_token(group="secure", expires_in_seconds=3600)
-print(token)
-PY
-}
-
+# Start servers if needed
 MCP_PID=""
 WEB_PID=""
 MCPO_PID=""
-if [ "$START_SERVERS" = true ]; then
+if [ "$START_SERVERS" = true ] && [ "$USE_DOCKER" = false ]; then
     echo -e "${GREEN}=== Starting Test Servers ===${NC}"
     start_mcp_server || { stop_servers; exit 1; }
     start_web_server || { stop_servers; exit 1; }
     start_mcpo_server || { stop_servers; exit 1; }
-    echo
+    echo ""
 fi
 
-echo -e "${GREEN}=== Running Code Quality Checks ===${NC}"
-set +e
-uv run python -m pytest test/code_quality/ -v
-QUALITY_EXIT_CODE=$?
-set -e
-
-if [ $QUALITY_EXIT_CODE -ne 0 ]; then
-    echo -e "${RED}=== Code Quality Checks Failed ===${NC}"
-    if [ "$START_SERVERS" = true ]; then
-        echo -e "${YELLOW}Stopping test servers...${NC}"
-        stop_servers
+# Build coverage arguments
+COVERAGE_ARGS=""
+if [ "$COVERAGE" = true ]; then
+    COVERAGE_ARGS="--cov=${COVERAGE_SOURCE} --cov-report=term-missing"
+    if [ "$COVERAGE_HTML" = true ]; then
+        COVERAGE_ARGS="${COVERAGE_ARGS} --cov-report=html:htmlcov"
     fi
-    exit $QUALITY_EXIT_CODE
+    echo -e "${BLUE}Coverage reporting enabled${NC}"
 fi
 
-echo -e "${GREEN}=== Running Functional Tests ===${NC}"
+# =============================================================================
+# RUN TESTS
+# =============================================================================
+
+echo -e "${GREEN}=== Running Tests ===${NC}"
 set +e
-if [ ${#PYTEST_ARGS[@]} -eq 0 ]; then
-    uv run python -m pytest test/ --ignore=test/code_quality/ -v
+TEST_EXIT_CODE=0
+
+if [ "$USE_DOCKER" = true ]; then
+    # Docker execution
+    if ! docker ps --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        echo -e "${RED}Container ${CONTAINER_NAME} is not running.${NC}"
+        echo "Run: ./docker/run-dev.sh to create it"
+        exit 1
+    fi
+    
+    # Reconstruct arguments for inner script
+    INNER_ARGS=""
+    if [ "$COVERAGE" = true ]; then INNER_ARGS="$INNER_ARGS --coverage"; fi
+    if [ "$COVERAGE_HTML" = true ]; then INNER_ARGS="$INNER_ARGS --coverage-html"; fi
+    if [ "$RUN_UNIT" = true ]; then INNER_ARGS="$INNER_ARGS --unit"; fi
+    if [ "$RUN_INTEGRATION" = true ]; then INNER_ARGS="$INNER_ARGS --integration"; fi
+    if [ "$START_SERVERS" = false ] && [ "$RUN_UNIT" = false ]; then INNER_ARGS="$INNER_ARGS --no-servers"; fi
+    
+    echo -e "${BLUE}Running tests inside container ${CONTAINER_NAME}...${NC}"
+    DOCKER_CMD="cd /home/gofr/devroot/${PROJECT_NAME} && ./scripts/run_tests.sh $INNER_ARGS"
+    docker exec "${CONTAINER_NAME}" bash -c "${DOCKER_CMD}"
+    TEST_EXIT_CODE=$?
+
+elif [ "$RUN_UNIT" = true ]; then
+    echo -e "${BLUE}Running unit tests only (no servers)...${NC}"
+    uv run python -m pytest ${TEST_DIR}/code_quality/ -v ${COVERAGE_ARGS}
+    TEST_EXIT_CODE=$?
+
+elif [ "$RUN_INTEGRATION" = true ]; then
+    echo -e "${BLUE}Running integration tests (with servers)...${NC}"
+    uv run python -m pytest ${TEST_DIR}/ --ignore=${TEST_DIR}/code_quality/ -v ${COVERAGE_ARGS}
+    TEST_EXIT_CODE=$?
+
+elif [ "$RUN_ALL" = true ]; then
+    echo -e "${BLUE}Running ALL tests...${NC}"
+    
+    # Code quality first
+    echo -e "${BLUE}Step 1/2: Code quality tests...${NC}"
+    uv run python -m pytest ${TEST_DIR}/code_quality/ -v
+    QUALITY_EXIT=$?
+    
+    if [ $QUALITY_EXIT -ne 0 ]; then
+        echo -e "${RED}Code quality tests failed${NC}"
+        TEST_EXIT_CODE=$QUALITY_EXIT
+    else
+        echo ""
+        echo -e "${BLUE}Step 2/2: Functional tests...${NC}"
+        uv run python -m pytest ${TEST_DIR}/ --ignore=${TEST_DIR}/code_quality/ -v ${COVERAGE_ARGS}
+        TEST_EXIT_CODE=$?
+    fi
+
+elif [ ${#PYTEST_ARGS[@]} -eq 0 ]; then
+    # Default: code quality then functional tests
+    echo -e "${BLUE}Running code quality tests...${NC}"
+    uv run python -m pytest ${TEST_DIR}/code_quality/ -v
+    QUALITY_EXIT=$?
+    
+    if [ $QUALITY_EXIT -ne 0 ]; then
+        echo -e "${RED}Code quality tests failed${NC}"
+        TEST_EXIT_CODE=$QUALITY_EXIT
+    else
+        echo ""
+        echo -e "${BLUE}Running functional tests...${NC}"
+        uv run python -m pytest ${TEST_DIR}/ --ignore=${TEST_DIR}/code_quality/ -v ${COVERAGE_ARGS}
+        TEST_EXIT_CODE=$?
+    fi
 else
-    uv run python -m pytest "${PYTEST_ARGS[@]}"
+    # Custom arguments
+    uv run python -m pytest "${PYTEST_ARGS[@]}" ${COVERAGE_ARGS}
+    TEST_EXIT_CODE=$?
 fi
-TEST_EXIT_CODE=$?
 set -e
 
-if [ "$START_SERVERS" = true ]; then
-    echo
+# =============================================================================
+# CLEANUP
+# =============================================================================
+
+if [ "$START_SERVERS" = true ] && [ "$USE_DOCKER" = false ]; then
+    echo ""
     echo -e "${YELLOW}Stopping test servers...${NC}"
-    if ! stop_servers; then
-        echo -e "${RED}Force killing remaining processes...${NC}"
-        ps aux | grep -E "python.*(main_mcp|main_web)" | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null || true
-        sleep 1
-    fi
-    # Final verification
-    if ps aux | grep -E "python.*(main_mcp|main_web)" | grep -v grep >/dev/null 2>&1; then
-        echo -e "${RED}WARNING: Some servers still running after cleanup${NC}"
-    fi
+    stop_servers || true
 fi
 
-# Clean up token store after tests
+# Clean up token store
 echo -e "${YELLOW}Cleaning up token store...${NC}"
 echo "{}" > "${GOFR_PLOT_TOKEN_STORE}" 2>/dev/null || true
-echo "Token store emptied"
 
-echo
+# =============================================================================
+# RESULTS
+# =============================================================================
+
+echo ""
 if [ $TEST_EXIT_CODE -eq 0 ]; then
     echo -e "${GREEN}=== Tests Passed ===${NC}"
+    if [ "$COVERAGE" = true ] && [ "$COVERAGE_HTML" = true ]; then
+        echo -e "${BLUE}HTML coverage report: ${PROJECT_ROOT}/htmlcov/index.html${NC}"
+    fi
 else
     echo -e "${RED}=== Tests Failed (exit code: ${TEST_EXIT_CODE}) ===${NC}"
     echo "Server logs:"
-    echo "  MCP: ${PROJECT_ROOT}/logs/gofr-plot_mcp_test.log"
-    echo "  Web: ${PROJECT_ROOT}/logs/gofr-plot_web_test.log"
-    if [ "$START_MCPO" = true ]; then
-        echo "  MCPO: ${PROJECT_ROOT}/logs/gofr-plot_mcpo_test.log"
-    fi
+    echo "  MCP:  ${LOG_DIR}/${PROJECT_NAME}_mcp_test.log"
+    echo "  Web:  ${LOG_DIR}/${PROJECT_NAME}_web_test.log"
+    echo "  MCPO: ${LOG_DIR}/${PROJECT_NAME}_mcpo_test.log"
 fi
 
 exit $TEST_EXIT_CODE
